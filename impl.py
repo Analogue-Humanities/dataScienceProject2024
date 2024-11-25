@@ -1,7 +1,10 @@
 # Defining all the necessary classes of the project
 from json import load
-from pandas import DataFrame, Series
+from pandas import DataFrame, Series, read_csv
 from sqlite3 import connect
+from rdflib import Graph, URIRef, Literal, RDF
+from rdflib.plugins.stores.sparqlstore import SPARQLUpdateStore
+import re
 
 
 
@@ -139,9 +142,64 @@ class UploadHandler(Handler):
         pass
 
 class MetadataUploadHandler(UploadHandler):
-    pass
+ #  def __init__(self):
+ #      super().__init__(self,dbPathOrUrl)
+ #       super().getDbPathOrUrl()
+ #       super().setDbPathOrUrl(DbPath)
+
+    def uploadToGrDb(self, data, name):
+        pass
+
+    def pushDataToDb(self, path: str) -> bool:
+
+        myGraph = Graph()
+
+        #IMPORTANT: OR I CAN MAKE A SET IN THE FOR LOOP BELOW TO
+        # Classes of Cultural Heritage Objects
+        nauticalChart = URIRef("https://www.wikidata.org/wiki/Q728502")
+        printedVolume = URIRef("https://schema.org/Book")
+        herbarium = URIRef("https://www.wikidata.org/wiki/Q181916")
+        printedMaterial = URIRef("https://www.wikidata.org/wiki/Q1261026")
+        specimen = URIRef("https://www.wikidata.org/wiki/Q85869058")
+        painting = URIRef("https://schema.org/Painting")
+        map = URIRef("https://schema.org/Map")
+        manuscriptVolume = URIRef("https://schema.org/Manuscript")
+        manuscriptPlate= URIRef("https://schema.org/Manuscript")
+        model = URIRef("https://www.wikidata.org/wiki/Q1979154")
+
+        # Attributes
+        id = URIRef("")
+        type = URIRef("")
+        title = URIRef("")
+        date = URIRef("")
+        author = URIRef("")
+        owner = URIRef("")
+        place = URIRef("")
+
+
+
+        base_url = "https://github.com/Analogue-Humanities"
+        subjects = {}
+
+        metaData = read_csv(path,
+                            keep_default_na = False,
+                            dtype = "string")
+
+        for idx, row in metaData.iterrows():
+
+            title = re.sub(r"[,)(]", "", row['Title']).strip().replace(" ","_")
+            subject = URIRef(base_url+"cHObject"+title)
+            subjects[row['Id']] = subject
+
+            if row['Type'] == 'Nautical chart':
+                myGraph.add((subject, RDF.type, nauticalChart))
+
 
 class ProcessDataUploadHandler(UploadHandler):
+    def __init__(self):
+        super().__init__(dbPathOrUrl)
+        super().getDbPathOrUrl()
+        super().setDbPathOrUrl(DbPath)
 
     def uploadToRelDb(self, data: DataFrame, name: str):
         with connect('Data.db') as con:
