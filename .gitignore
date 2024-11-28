@@ -1,6 +1,6 @@
 # created by virtualenv automatically
 *.log
 test.csv
-running_code.py
-.venv
 __pycache__
+.venv
+running_code.py

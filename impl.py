@@ -1,6 +1,7 @@
 # Defining all the necessary classes of the project
 from json import load
 from pandas import DataFrame, Series, read_csv
+from urllib.parse import quote
 from sqlite3 import connect
 from rdflib import Graph, URIRef, Literal, RDF
 from rdflib.plugins.stores.sparqlstore import SPARQLUpdateStore
@@ -147,39 +148,75 @@ class MetadataUploadHandler(UploadHandler):
  #       super().getDbPathOrUrl()
  #       super().setDbPathOrUrl(DbPath)
 
-    def uploadToGrDb(self, data, name):
-        pass
+    def uploadToGrDb(self, graph):
+
+        store = SPARQLUpdateStore()
+
+        endpoint = 'http://127.0.0.1:9999/blazegraph/sparql'
+
+        store.open((endpoint, endpoint))
+
+        for triple in graph.triples((None, None, None)):
+            store.add(triple)
+
+        store.close()
+
+        return store
 
     def pushDataToDb(self, path: str) -> bool:
 
         myGraph = Graph()
 
         #IMPORTANT: OR I CAN MAKE A SET IN THE FOR LOOP BELOW TO
+        #LAST SOLUTION : TO MAKE A DICTIONARY OUT OF THEM AND MAKE ALL THE VARIABLES INTO STRINGS. AND IT WORKS
         # Classes of Cultural Heritage Objects
-        nauticalChart = URIRef("https://www.wikidata.org/wiki/Q728502")
-        printedVolume = URIRef("https://schema.org/Book")
-        herbarium = URIRef("https://www.wikidata.org/wiki/Q181916")
-        printedMaterial = URIRef("https://www.wikidata.org/wiki/Q1261026")
-        specimen = URIRef("https://www.wikidata.org/wiki/Q85869058")
-        painting = URIRef("https://schema.org/Painting")
-        map = URIRef("https://schema.org/Map")
-        manuscriptVolume = URIRef("https://schema.org/Manuscript")
-        manuscriptPlate= URIRef("https://schema.org/Manuscript")
-        model = URIRef("https://www.wikidata.org/wiki/Q1979154")
+        type_classes = {'nauticalChart' : URIRef("https://www.wikidata.org/wiki/Q728502"),
+        'printedVolume' : URIRef("https://schema.org/Book"),
+        'herbarium' : URIRef("https://www.wikidata.org/wiki/Q181916"),
+        'printedMaterial' : URIRef("https://www.wikidata.org/wiki/Q1261026"),
+        'specimen' : URIRef("https://www.wikidata.org/wiki/Q85869058"),
+        'painting' : URIRef("https://schema.org/Painting"),
+        'map' : URIRef("https://schema.org/Map"),
+        'manuscriptVolume' : URIRef("https://schema.org/Manuscript"),
+        'manuscriptPlate' : URIRef("https://schema.org/Manuscript"),
+        'model' : URIRef("https://www.wikidata.org/wiki/Q1979154")}
+
+        owners = {'BUB' : "https://www.wikidata.org/wiki/Q2901539", # Biblioteca Universitaria di Bologna
+        'Sistema Museale di Ateneo di Bologna' : "https://www.wikidata.org/wiki/Q3485343",
+        'Biblioteca del Dipartimento di Scienze Biologiche, Geologiche e Ambientali, Bologna' : \
+                        "https://www.wikidata.org/wiki/Q112169891",
+        'Accademia Carrara' : "https://www.wikidata.org/wiki/Q338367",
+        'Orto Botanico ed Herbarium di Bologna' : "https://www.wikidata.org/wiki/Q3133893",
+        'Museo di Palazzo Poggi' : "https://www.wikidata.org/wiki/Q3868219",
+        'Museo di Storia Naturale di Verona' : "https://www.wikidata.org/wiki/Q3867829"}
+
+        places = {
+            'Bologna' : "https://www.wikidata.org/wiki/Q1891",
+            'Bergamo' : "https://www.wikidata.org/wiki/Q628",
+            'Verona' : "https://www.wikidata.org/wiki/Q2028",
+            "Ozzano dell'Emilia" : "https://www.wikidata.org/wiki/Q29080"
+        }
+
+        library = "https://schema.org/Library"
+        museum = "https://schema.org/Museum"
+        city = "https://schema.org/City"
 
         # Attributes
-        id = URIRef("")
-        type = URIRef("")
-        title = URIRef("")
-        date = URIRef("")
-        author = URIRef("")
-        owner = URIRef("")
-        place = URIRef("")
+        id = URIRef("https://schema.org/identifier")
+        title = URIRef("https://schema.org/name")
+        date = URIRef("https://schema.org/dateCreated")
+        name = URIRef("https://schema.org/name")
 
-
+        # Relation
+        author = URIRef("https://schema.org/author")
+        owner = URIRef("https://schema.org/owns")
+        place = URIRef("https://schema.org/location")
 
         base_url = "https://github.com/Analogue-Humanities"
         subjects = {}
+        types = set()
+        typesDict = dict()
+        authorMapping = {}
 
         metaData = read_csv(path,
                             keep_default_na = False,
@@ -187,12 +224,101 @@ class MetadataUploadHandler(UploadHandler):
 
         for idx, row in metaData.iterrows():
 
-            title = re.sub(r"[,)(]", "", row['Title']).strip().replace(" ","_")
-            subject = URIRef(base_url+"cHObject"+title)
+            objTitle = re.sub(r"[,)(]", "", row['Title']).strip().replace(" ","_")
+            subject = URIRef(base_url+"cHObject"+objTitle)
             subjects[row['Id']] = subject
+            types.update(row['Type'])
+            newType = MetadataUploadHandler.makeClassName(self, row['Type'])
+            # Add the triples of subject and the type to the Graph
+            myGraph.add((subject, RDF.type, type_classes[newType]))
 
-            if row['Type'] == 'Nautical chart':
-                myGraph.add((subject, RDF.type, nauticalChart))
+            # Add th triples of subject and id to the Graph
+            myGraph.add((subject, id, Literal(row['Id'])))
+
+            # Add the triples of subject and title to the Graph
+            myGraph.add((subject, title, Literal(row['Title'].strip())))
+
+            # Add date triples
+            myGraph.add((subject, date, Literal(row['Date'])))
+
+            # Extract author's name from the string and check if the authority is VIAF of ULAN
+            authorNameVi = re.search(  r"^[^()]*?(?= \(VAIF)", row['Author'])
+            authorNameUl = re.search(  r"^[^()]*?(?= \(ULAN)", row['Author'])
+
+            if authorNameVi:
+                authorName = authorNameVi.group()
+                viafId = ''.join(filter(lambda i: i.isdigit(), row['Author']))
+                authorId = URIRef("https://viaf.org/viaf/" + viafId)
+                # Add the Authors and value it's pair of URI to a dictionary to use it later
+                authorMapping[authorName] = authorId
+                myGraph.add((subject, author, authorId))
+                myGraph.add((authorId, id, Literal('VIAF:'+viafId)))
+                myGraph.add((authorId, name, Literal(authorName)))
+
+            elif authorNameUl:
+                authorName = authorNameUl.group()
+                ulanId = ''.join(filter(lambda i: i.isdigit(), row['Author']))
+                authorId = URIRef("http://vocab.getty.edu/page/ulan/" + ulanId)
+                authorMapping[authorName] = authorId
+
+                myGraph.add((subject, author, authorId))
+                myGraph.add((authorId, id, Literal('ULAN:'+ulanId))) # This will be repeated. make a set and put the operation out of the loop
+                myGraph.add((authorId, name, Literal(authorName)))  # This will be repeated. make a set and put the operation out of the loop
+
+            else:
+                myGraph.add((subject, author, Literal('Unknown')))
+
+            # Produce the RDF of the owner information
+            myGraph.add((subject, owner, URIRef(owners[row['Owner']])))
+
+            # Produce and add the RDF for the place information
+            myGraph.add((subject, place, URIRef(places[row['Place']])))
+
+        # Produce triple based on owners names and uris
+        for k, v in owners.items():
+            myGraph.add((URIRef(v), name, Literal(k)))
+            ownerId = re.search(r"(Q\d+)", v)
+
+            if ownerId:
+                ownerId = ownerId.group()
+                myGraph.add((URIRef(v), id, Literal(ownerId)))
+
+        myGraph.add((URIRef(owners['BUB']), RDF.type, URIRef(library)))
+        myGraph.add((URIRef(owners['Sistema Museale di Ateneo di Bologna']), RDF.type, URIRef(museum)))
+        myGraph.add((URIRef(
+            owners['Biblioteca del Dipartimento di Scienze Biologiche, Geologiche e Ambientali, Bologna']), RDF.type,
+                     URIRef(library)))
+        myGraph.add((URIRef(
+            owners['Biblioteca del Dipartimento di Scienze Biologiche, Geologiche e Ambientali, Bologna']), RDF.type,
+                     URIRef(library)))
+        myGraph.add((URIRef(owners['Accademia Carrara']), RDF.type, URIRef(museum)))
+        myGraph.add((URIRef(owners['Orto Botanico ed Herbarium di Bologna']), RDF.type, URIRef(museum)))
+        myGraph.add((URIRef(owners['Museo di Palazzo Poggi']), RDF.type, URIRef(museum)))
+        myGraph.add((URIRef(owners['Museo di Storia Naturale di Verona']), RDF.type, URIRef(museum)))
+
+        #produce triple on place names and uris
+        for k, v in places.items():
+            myGraph.add((URIRef(v), name, Literal(k)))
+            placeId = re.search(r"(Q\d+)", v)
+
+            if placeId:
+                placeId = placeId.group()
+                myGraph.add((URIRef(v), id, Literal(placeId)))
+
+        myGraph.add((URIRef(places['Bologna']), RDF.type, URIRef('https://schema.org/City')))
+        myGraph.add((URIRef(places['Bergamo']), RDF.type, URIRef('https://schema.org/City')))
+        myGraph.add((URIRef(places['Verona']), RDF.type, URIRef('https://schema.org/City')))
+        myGraph.add((URIRef(places["Ozzano dell'Emilia"]), RDF.type, URIRef('https://schema.org/City')))
+
+        return MetadataUploadHandler.uploadToGrDb(self, myGraph)
+
+
+    def makeClassName(self, name: str) ->str:
+        n = name.split()
+        newClassName = n[0].lower()
+        if len(n)>1:
+            newClassName = newClassName+n[1].capitalize()
+        return newClassName
 
 
 class ProcessDataUploadHandler(UploadHandler):
