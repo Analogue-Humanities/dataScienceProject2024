@@ -4,3 +4,5 @@ test.csv
 __pycache__
 .venv
 running_code.py
+blazegraph.jar
+blazegraph.jnl
