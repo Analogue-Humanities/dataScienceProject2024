@@ -5,20 +5,20 @@ hand = Handler()
 
 print(hand.getDbPathOrUrl())
 
-#path = 'data/process.json'
-#hand.setDbPathOrUrl(path)
-#file = hand.getDbPathOrUrl()
-#print(file)
+path1 = 'data/process.json'
+hand.setDbPathOrUrl(path1)
+file1 = hand.getDbPathOrUrl()
+print(file1)
 
-#process = ProcessDataUploadHandler()
+process = ProcessDataUploadHandler()
 
-#df = process.pushDataToDb(file)
-#print(df)
+df = process.pushDataToDb(file1)
+print(df)
 
 #df.to_csv('test.csv')
 
-path = 'data/meta.csv'
-hand.setDbPathOrUrl(path)
+path2 = 'data/meta.csv'
+hand.setDbPathOrUrl(path2)
 hand.getDbPathOrUrl()
 
 meta = MetadataUploadHandler()
