@@ -143,10 +143,10 @@ class UploadHandler(Handler):
         pass
 
 class MetadataUploadHandler(UploadHandler):
- #  def __init__(self):
- #      super().__init__(self,dbPathOrUrl)
- #       super().getDbPathOrUrl()
- #       super().setDbPathOrUrl(DbPath)
+#    def __init__(self):
+#        super().__init__(self,self.dbPathOrUrl)
+#        super().getDbPathOrUrl()
+#        super().setDbPathOrUrl(self.DbPath)
 
     def uploadToGrDb(self, graph):
 
@@ -225,7 +225,7 @@ class MetadataUploadHandler(UploadHandler):
         for idx, row in metaData.iterrows():
 
             objTitle = re.sub(r"[,)(]", "", row['Title']).strip().replace(" ","_")
-            subject = URIRef(base_url+"cHObject"+objTitle)
+            subject = URIRef(base_url+"/cHObject/"+objTitle)
             subjects[row['Id']] = subject
             types.update(row['Type'])
             newType = MetadataUploadHandler.makeClassName(self, row['Type'])
@@ -241,8 +241,8 @@ class MetadataUploadHandler(UploadHandler):
             # Add date triples
             myGraph.add((subject, date, Literal(row['Date'])))
 
-            # Extract author's name from the string and check if the authority is VIAF of ULAN
-            authorNameVi = re.search(  r"^[^()]*?(?= \(VAIF)", row['Author'])
+            # Extract author's name from the string and check if the authority is VIAF or ULAN
+            authorNameVi = re.search(  r"^[^()]*?(?= \(VIAF)", row['Author'])
             authorNameUl = re.search(  r"^[^()]*?(?= \(ULAN)", row['Author'])
 
             if authorNameVi:
@@ -322,10 +322,10 @@ class MetadataUploadHandler(UploadHandler):
 
 
 class ProcessDataUploadHandler(UploadHandler):
-    def __init__(self):
-        super().__init__(dbPathOrUrl)
-        super().getDbPathOrUrl()
-        super().setDbPathOrUrl(DbPath)
+    #def __init__(self):
+        #super().__init__(self.dbPathOrUrl)
+        #super().getDbPathOrUrl()
+        #super().setDbPathOrUrl(self.DbPath)
 
     def uploadToRelDb(self, data: DataFrame, name: str):
         with connect('Data.db') as con:

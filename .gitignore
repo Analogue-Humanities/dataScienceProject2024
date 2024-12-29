@@ -6,3 +6,5 @@ __pycache__
 running_code.py
 blazegraph.jar
 blazegraph.jnl
+.idea
+data/trash_class.py
