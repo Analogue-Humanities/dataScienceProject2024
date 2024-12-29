@@ -1,6 +1,6 @@
 from impl import Handler
 from sqlite3 import connect
-from pandas import read_sql, DataFrame
+from pandas import read_sql, DataFrame, concat
 from sparql_dataframe import get
 
 # Reading from the sql database, as a sample just a simple query
@@ -51,13 +51,42 @@ class QueryHandler(Handler):
             return None
 
 
-queryHandler = QueryHandler()
-print(queryHandler.getById("Viadfs"))
+#queryHandler = QueryHandler()
+#print(queryHandler.getById("Viadfs"))
 
 class MetadataQueryHandler(QueryHandler):
 
     def getAllPeople(self) -> DataFrame:
-        pass
+        endpoint = "http://127.0.0.1:9999/blazegraph/sparql"
+        query = f"""
+               PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+               PREFIX schema: <https://schema.org/>
+               SELECT ?person
+               WHERE {{
+                    ?s schema:author ?authorId.
+                    ?authorId schema:name ?person.
+               }}
+               """
+        df_personGraph = get(endpoint, query, True)
+
+        # Reading the sql file and querying from 5 tables the column corresponding to person, renaming the column label and
+        # concatenating it with the dataframe extracted from Graph dataframe
+        with connect('Data.db') as con:
+            query2 = '''SELECT "responsible person" FROM Acquisition
+                     UNION
+                     SELECT "responsible person" FROM Exporting
+                     UNION
+                     SELECT "responsible person" FROM Modelling
+                     UNION
+                     SELECT "responsible person" FROM Processing
+                     UNION
+                     SELECT "responsible person" FROM Optimising'''
+            df_personSql = read_sql(query2, con).rename(columns={"responsible person":"person"})
+
+        df_persons = concat([df_personSql, df_personGraph], ignore_index=True)
+        df_persons = df_persons.drop(df_persons[df_persons["person"] ==""].index)
+        df_persons = df_persons.reset_index(drop=True)
+        return df_persons
 
     def getAllCulturalHeritageObjects(self) -> DataFrame:
         pass
@@ -70,3 +99,7 @@ class MetadataQueryHandler(QueryHandler):
 
 class ProcessDataQueryHandler(QueryHandler):
     pass
+
+
+qh = MetadataQueryHandler()
+print(qh.getAllPeople())
