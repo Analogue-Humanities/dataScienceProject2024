@@ -132,28 +132,33 @@ class Handler:
         self.dbPathOrUrl = dbPathOrUrl
 
     def getDbPathOrUrl(self)-> str:
-        return "No URL yet" if  self.dbPathOrUrl == "" else str(self.dbPathOrUrl)
+        return "No URL yet" if self.dbPathOrUrl == "" else str(self.dbPathOrUrl)
 
-    def setDbPathOrUrl(self,DbPath) ->bool: #This method sets or changes the value of the dbPathOrUrl variable
+    def setDbPathOrUrl(self,DbPath) ->bool: # This method sets or changes the value of the dbPathOrUrl variable
         self.dbPathOrUrl = DbPath
         return True
 
 class UploadHandler(Handler):
+#    def __init__(self, dbPathOrUrl, DbPath):
+#        super().__init__(dbPathOrUrl)
+#        super().setDbPathOrUrl(DbPath)
+
     def pushDataToDb(self, path: str) -> bool:
-        pass
+        self.path = path
 
 class MetadataUploadHandler(UploadHandler):
-#    def __init__(self):
-#        super().__init__(self,self.dbPathOrUrl)
-#        super().getDbPathOrUrl()
-#        super().setDbPathOrUrl(self.DbPath)
+    def __init__(self, dbPathOrUrl, DBPath):
+        super().__init__(dbPathOrUrl)
+        super().setDbPathOrUrl(DBPath)
+        super().getDbPathOrUrl()
 
     def uploadToGrDb(self, graph):
 
         store = SPARQLUpdateStore()
 
-        endpoint = 'http://127.0.0.1:9999/blazegraph/sparql'
+        # endpoint = 'http://127.0.0.1:9999/blazegraph/sparql'
 
+        endpoint = MetadataUploadHandler.getDbPathOrUrl(self)
         store.open((endpoint, endpoint))
 
         for triple in graph.triples((None, None, None)):
@@ -164,6 +169,7 @@ class MetadataUploadHandler(UploadHandler):
         return store
 
     def pushDataToDb(self, path: str) -> bool:
+
 
         myGraph = Graph()
 
@@ -215,7 +221,6 @@ class MetadataUploadHandler(UploadHandler):
         base_url = "https://github.com/Analogue-Humanities"
         subjects = {}
         types = set()
-        typesDict = dict()
         authorMapping = {}
 
         metaData = read_csv(path,
@@ -322,17 +327,16 @@ class MetadataUploadHandler(UploadHandler):
 
 
 class ProcessDataUploadHandler(UploadHandler):
-    #def __init__(self):
-        #super().__init__(self.dbPathOrUrl)
-        #super().getDbPathOrUrl()
-        #super().setDbPathOrUrl(self.DbPath)
+    def __init__(self, dbPathOrUrl, DBPath):
+        super().__init__(dbPathOrUrl)
+        super().setDbPathOrUrl(DBPath)
+        super().getDbPathOrUrl()
 
     def uploadToRelDb(self, data: DataFrame, name: str):
-        with connect('Data.db') as con:
+        with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
             return data.to_sql(name, con, if_exists='replace', index = False)
 
     def pushDataToDb(self, path: str) -> bool:
-#    try:
         with open(path, 'r', encoding='utf-8') as f:
             data = load(f)
 
@@ -413,30 +417,35 @@ class ProcessDataUploadHandler(UploadHandler):
             # Adding acquisition records to dataframe
             df_acquisition = DataFrame(acquisition_records)
             df_acquisition.insert(0,"Object Id", Series(objectIds, index = None))
+            df_acquisition.insert(6, "activity", "acquisition")
             df_acquisition.drop('tool', axis = 1, inplace = True)
             ProcessDataUploadHandler.uploadToRelDb(self, df_acquisition,'Acquisition')
 
             # Adding processing records to dataframe
             df_processing = DataFrame(processing_records)
             df_processing.insert(0,"Object Id", Series(objectIds, index = None, dtype = str))
+            df_processing.insert(5, "activity", "processing")
             df_processing.drop('tool', axis = 1, inplace = True)
             ProcessDataUploadHandler.uploadToRelDb(self, df_processing, 'Processing')
 
             # Adding modelling records to dataframe
             df_modelling = DataFrame(modelling_records)
             df_modelling.insert(0,"Object Id", Series(objectIds, index = None, dtype = str))
+            df_modelling.insert(5, "activity", "modelling")
             df_modelling.drop('tool', axis=1, inplace = True)
             ProcessDataUploadHandler.uploadToRelDb(self, df_modelling, 'Modelling')
 
             # Adding optimising records to dataframe
             df_optimising = DataFrame(optimising_records)
             df_optimising.insert(0,"Object Id", Series(objectIds, index = None, dtype = str))
+            df_optimising.insert(5, "activity", "optimising")
             df_optimising.drop('tool', axis=1, inplace = True)
-            ProcessDataUploadHandler.uploadToRelDb(self, df_optimising, 'optimising')
+            ProcessDataUploadHandler.uploadToRelDb(self, df_optimising, 'Optimising')
 
             # Adding exporting records to dataframe
             df_exporting = DataFrame(exporting_records)
             df_exporting.insert(0,"Object Id", Series(objectIds, index = None, dtype = str))
+            df_exporting.insert(5, "activity", "exporting")
             df_exporting.drop('tool', axis=1, inplace = True)
             ProcessDataUploadHandler.uploadToRelDb(self, df_exporting, 'Exporting')
 

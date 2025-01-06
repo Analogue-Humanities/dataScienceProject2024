@@ -25,3 +25,11 @@ meta = MetadataUploadHandler()
 
 test = meta.pushDataToDb(hand.getDbPathOrUrl())
 print(test)
+
+#########################################################################################
+# The way it is implemented in the project specifications
+
+rel_path = "relational.db"
+process = ProcessDataUploadHandler()
+process.setDbPathOrUrl(rel_path)
+process.pushDataToDb("data/process.json")
