@@ -1,11 +1,11 @@
 # Defining all the necessary classes of the project
 from json import load
-from pandas import DataFrame, Series, read_csv
-from urllib.parse import quote
+from pandas import DataFrame, read_csv, read_sql, concat
 from sqlite3 import connect
 from rdflib import Graph, URIRef, Literal, RDF
 from rdflib.plugins.stores.sparqlstore import SPARQLUpdateStore
 import re
+from sparql_dataframe import get
 
 
 
@@ -19,7 +19,8 @@ class IdentifiableEntity(object):
 
 # The cultural Heritage Object class definition
 class CulturalHeritageObject(IdentifiableEntity):
-    def __init__(self, title, date, owner,  place, authors):
+    def __init__(self, id, title, date=None, owner=None,  place=None, authors=None):
+        super().__init__(id)
         self.title = title
         self.date = date
         self.owner = owner
@@ -39,12 +40,11 @@ class CulturalHeritageObject(IdentifiableEntity):
         return self.place
 
     def getAuthors(self):
-        return
+        return self.authors
 
 # Defining 10 types of Cultural Heritage Objects classes
 class Map(CulturalHeritageObject):
     pass
-
 class Model(CulturalHeritageObject):
     pass
 
@@ -74,7 +74,8 @@ class NauticalChart(CulturalHeritageObject):
 
 
 class Person(IdentifiableEntity):
-    def __init__(self,name):
+    def __init__(self, name, id=None):
+        super().__init__(id)
         self.name = name
     def getName(self):
         return self.name
@@ -107,7 +108,8 @@ class Activity(object):
         return self.refersTo
 
 class Acquisition(Activity):
-    def __init__(self,technique):
+    def __init__(self,technique, institute, person, tool, start, end, refersTo):
+        super().__init__(institute, person, tool, start, end, refersTo)
         self.technique = technique
 
     def getTechnique(self):
@@ -128,64 +130,62 @@ class Exporting(Activity):
 # Defining operational classes
 # First the Handlers
 class Handler:
-    def __init__(self, dbPathOrUrl=""): # The initial value of the dbPathOrUrl
-        self.dbPathOrUrl = dbPathOrUrl
+    def __init__(self):
+        self.dbPathOrUrl = "" # The initial value of the dbPathOrUrl
 
     def getDbPathOrUrl(self)-> str:
-        return "No URL yet" if self.dbPathOrUrl == "" else str(self.dbPathOrUrl)
+        return self.dbPathOrUrl
 
-    def setDbPathOrUrl(self,DbPath) ->bool: # This method sets or changes the value of the dbPathOrUrl variable
-        self.dbPathOrUrl = DbPath
+    def setDbPathOrUrl(self,pathOrUrl) ->bool: # This method sets or changes the value of the dbPathOrUrl variable
+        self.dbPathOrUrl = pathOrUrl
         return True
 
 class UploadHandler(Handler):
-#    def __init__(self, dbPathOrUrl, DbPath):
-#        super().__init__(dbPathOrUrl)
-#        super().setDbPathOrUrl(DbPath)
+#    def __init__(self, dbPathOrUrl, pathOrUrl):
+#        super().__init__()
+#        super().setDbPathOrUrl(pathOrUrl)
 
     def pushDataToDb(self, path: str) -> bool:
-        self.path = path
+        # This is an abstract method
+        raise NotImplementedError("Subclasses must implement pushDataToDb")
 
 class MetadataUploadHandler(UploadHandler):
-    def __init__(self, dbPathOrUrl, DBPath):
-        super().__init__(dbPathOrUrl)
-        super().setDbPathOrUrl(DBPath)
-        super().getDbPathOrUrl()
+#    def __init__(self, dbPathOrUrl, pathOrUrl):
+#        super().__init__()
+#        super().setDbPathOrUrl(pathOrUrl)
 
     def uploadToGrDb(self, graph):
 
         store = SPARQLUpdateStore()
-
-        # endpoint = 'http://127.0.0.1:9999/blazegraph/sparql'
-
         endpoint = MetadataUploadHandler.getDbPathOrUrl(self)
         store.open((endpoint, endpoint))
 
-        for triple in graph.triples((None, None, None)):
-            store.add(triple)
+        for s, p, o in graph:
+            ask_query = f"ASK {{ <{s}> <{p}> <{o}> }}"
+            result = store.query(ask_query)
+            if not bool(result):
+                store.add((s, p, o))
 
         store.close()
-
         return store
 
     def pushDataToDb(self, path: str) -> bool:
-
 
         myGraph = Graph()
 
         #IMPORTANT: OR I CAN MAKE A SET IN THE FOR LOOP BELOW TO
         #LAST SOLUTION : TO MAKE A DICTIONARY OUT OF THEM AND MAKE ALL THE VARIABLES INTO STRINGS. AND IT WORKS
         # Classes of Cultural Heritage Objects
-        type_classes = {'nauticalChart' : URIRef("https://www.wikidata.org/wiki/Q728502"),
-        'printedVolume' : URIRef("https://schema.org/Book"),
-        'herbarium' : URIRef("https://www.wikidata.org/wiki/Q181916"),
-        'printedMaterial' : URIRef("https://www.wikidata.org/wiki/Q1261026"),
-        'specimen' : URIRef("https://www.wikidata.org/wiki/Q85869058"),
-        'painting' : URIRef("https://schema.org/Painting"),
-        'map' : URIRef("https://schema.org/Map"),
-        'manuscriptVolume' : URIRef("https://schema.org/Manuscript"),
-        'manuscriptPlate' : URIRef("https://schema.org/Manuscript"),
-        'model' : URIRef("https://www.wikidata.org/wiki/Q1979154")}
+        type_classes = {'NauticalChart' : URIRef("https://www.wikidata.org/wiki/Q728502"),
+        'PrintedVolume' : URIRef("https://schema.org/Book"),
+        'Herbarium' : URIRef("https://www.wikidata.org/wiki/Q181916"),
+        'PrintedMaterial' : URIRef("https://www.wikidata.org/wiki/Q1261026"),
+        'Specimen' : URIRef("https://www.wikidata.org/wiki/Q85869058"),
+        'Painting' : URIRef("https://schema.org/Painting"),
+        'Map' : URIRef("https://schema.org/Map"),
+        'ManuscriptVolume' : URIRef("https://schema.org/Manuscript"),
+        'ManuscriptPlate' : URIRef("https://schema.org/Manuscript"),
+        'Model' : URIRef("https://www.wikidata.org/wiki/Q1979154")}
 
         owners = {'BUB' : "https://www.wikidata.org/wiki/Q2901539", # Biblioteca Universitaria di Bologna
         'Sistema Museale di Ateneo di Bologna' : "https://www.wikidata.org/wiki/Q3485343",
@@ -223,230 +223,187 @@ class MetadataUploadHandler(UploadHandler):
         types = set()
         authorMapping = {}
 
-        metaData = read_csv(path,
-                            keep_default_na = False,
-                            dtype = "string")
+        try:
+            metaData = read_csv(path,
+                                keep_default_na = False,
+                                dtype = "string")
 
-        for idx, row in metaData.iterrows():
+            for idx, row in metaData.iterrows():
 
-            objTitle = re.sub(r"[,)(]", "", row['Title']).strip().replace(" ","_")
-            subject = URIRef(base_url+"/cHObject/"+objTitle)
-            subjects[row['Id']] = subject
-            types.update(row['Type'])
-            newType = MetadataUploadHandler.makeClassName(self, row['Type'])
-            # Add the triples of subject and the type to the Graph
-            myGraph.add((subject, RDF.type, type_classes[newType]))
+                objTitle = re.sub(r"[,)(]", "", row['Title']).strip().replace(" ","_")
+                subject = URIRef(base_url+"/cHObject/"+objTitle)
+                subjects[row['Id']] = subject
+                types.update(row['Type'])
+                newType = MetadataUploadHandler.makeClassName(self, row['Type'])
+                # Add the triples of subject and the type to the Graph
+                myGraph.add((subject, RDF.type, type_classes[newType]))
+                # Adding the literal names of types as they are in the database
+                myGraph.add((type_classes[newType], name, Literal(newType)))
 
-            # Add th triples of subject and id to the Graph
-            myGraph.add((subject, id, Literal(row['Id'])))
+                # Add th triples of subject and id to the Graph
+                myGraph.add((subject, id, Literal(row['Id'])))
 
-            # Add the triples of subject and title to the Graph
-            myGraph.add((subject, title, Literal(row['Title'].strip())))
+                # Add the triples of subject and title to the Graph
+                myGraph.add((subject, title, Literal(row['Title'].strip())))
 
-            # Add date triples
-            myGraph.add((subject, date, Literal(row['Date'])))
+                # Add date triples
+                myGraph.add((subject, date, Literal(row['Date'])))
 
-            # Extract author's name from the string and check if the authority is VIAF or ULAN
-            authorNameVi = re.search(  r"^[^()]*?(?= \(VIAF)", row['Author'])
-            authorNameUl = re.search(  r"^[^()]*?(?= \(ULAN)", row['Author'])
+                # Extract author's name from the string and check if the authority is VIAF or ULAN
+                authorNameVi = re.search(  r"^[^()]*?(?= \(VIAF)", row['Author'])
+                authorNameUl = re.search(  r"^[^()]*?(?= \(ULAN)", row['Author'])
 
-            if authorNameVi:
-                authorName = authorNameVi.group()
-                viafId = ''.join(filter(lambda i: i.isdigit(), row['Author']))
-                authorId = URIRef("https://viaf.org/viaf/" + viafId)
-                # Add the Authors and value it's pair of URI to a dictionary to use it later
-                authorMapping[authorName] = authorId
-                myGraph.add((subject, author, authorId))
-                myGraph.add((authorId, id, Literal('VIAF:'+viafId)))
-                myGraph.add((authorId, name, Literal(authorName)))
+                if authorNameVi:
+                    authorName = authorNameVi.group()
+                    viafId = ''.join(filter(lambda i: i.isdigit(), row['Author']))
+                    authorId = URIRef("https://viaf.org/viaf/" + viafId)
+                    # Add the Authors and value it's pair of URI to a dictionary to use it later
+                    authorMapping[authorName] = authorId
+                    myGraph.add((subject, author, authorId))
+                    myGraph.add((authorId, id, Literal('VIAF:'+viafId)))
+                    myGraph.add((authorId, name, Literal(authorName)))
 
-            elif authorNameUl:
-                authorName = authorNameUl.group()
-                ulanId = ''.join(filter(lambda i: i.isdigit(), row['Author']))
-                authorId = URIRef("http://vocab.getty.edu/page/ulan/" + ulanId)
-                authorMapping[authorName] = authorId
+                elif authorNameUl:
+                    authorName = authorNameUl.group()
+                    ulanId = ''.join(filter(lambda i: i.isdigit(), row['Author']))
+                    authorId = URIRef("http://vocab.getty.edu/page/ulan/" + ulanId)
+                    authorMapping[authorName] = authorId
 
-                myGraph.add((subject, author, authorId))
-                myGraph.add((authorId, id, Literal('ULAN:'+ulanId))) # This will be repeated. make a set and put the operation out of the loop
-                myGraph.add((authorId, name, Literal(authorName)))  # This will be repeated. make a set and put the operation out of the loop
+                    myGraph.add((subject, author, authorId))
+                    myGraph.add((authorId, id, Literal('ULAN:'+ulanId))) # This will be repeated. make a set and put the operation out of the loop
+                    myGraph.add((authorId, name, Literal(authorName)))  # This will be repeated. make a set and put the operation out of the loop
 
-            else:
-                myGraph.add((subject, author, Literal('Unknown')))
+                else:
+                    myGraph.add((subject, author, Literal('Unknown')))
 
-            # Produce the RDF of the owner information
-            myGraph.add((subject, owner, URIRef(owners[row['Owner']])))
+                # Produce the RDF of the owner information
+                myGraph.add((subject, owner, URIRef(owners[row['Owner']])))
 
-            # Produce and add the RDF for the place information
-            myGraph.add((subject, place, URIRef(places[row['Place']])))
+                # Produce and add the RDF for the place information
+                myGraph.add((subject, place, URIRef(places[row['Place']])))
 
-        # Produce triple based on owners names and uris
-        for k, v in owners.items():
-            myGraph.add((URIRef(v), name, Literal(k)))
-            ownerId = re.search(r"(Q\d+)", v)
+            # Produce triple based on owners names and uris
+            for k, v in owners.items():
+                myGraph.add((URIRef(v), name, Literal(k)))
+                ownerId = re.search(r"(Q\d+)", v)
 
-            if ownerId:
-                ownerId = ownerId.group()
-                myGraph.add((URIRef(v), id, Literal(ownerId)))
+                if ownerId:
+                    ownerId = ownerId.group()
+                    myGraph.add((URIRef(v), id, Literal(ownerId)))
 
-        myGraph.add((URIRef(owners['BUB']), RDF.type, URIRef(library)))
-        myGraph.add((URIRef(owners['Sistema Museale di Ateneo di Bologna']), RDF.type, URIRef(museum)))
-        myGraph.add((URIRef(
-            owners['Biblioteca del Dipartimento di Scienze Biologiche, Geologiche e Ambientali, Bologna']), RDF.type,
-                     URIRef(library)))
-        myGraph.add((URIRef(
-            owners['Biblioteca del Dipartimento di Scienze Biologiche, Geologiche e Ambientali, Bologna']), RDF.type,
-                     URIRef(library)))
-        myGraph.add((URIRef(owners['Accademia Carrara']), RDF.type, URIRef(museum)))
-        myGraph.add((URIRef(owners['Orto Botanico ed Herbarium di Bologna']), RDF.type, URIRef(museum)))
-        myGraph.add((URIRef(owners['Museo di Palazzo Poggi']), RDF.type, URIRef(museum)))
-        myGraph.add((URIRef(owners['Museo di Storia Naturale di Verona']), RDF.type, URIRef(museum)))
+            myGraph.add((URIRef(owners['BUB']), RDF.type, URIRef(library)))
+            myGraph.add((URIRef(owners['Sistema Museale di Ateneo di Bologna']), RDF.type, URIRef(museum)))
+            myGraph.add((URIRef(
+                owners['Biblioteca del Dipartimento di Scienze Biologiche, Geologiche e Ambientali, Bologna']), RDF.type,
+                         URIRef(library)))
+            myGraph.add((URIRef(
+                owners['Biblioteca del Dipartimento di Scienze Biologiche, Geologiche e Ambientali, Bologna']), RDF.type,
+                         URIRef(library)))
+            myGraph.add((URIRef(owners['Accademia Carrara']), RDF.type, URIRef(museum)))
+            myGraph.add((URIRef(owners['Orto Botanico ed Herbarium di Bologna']), RDF.type, URIRef(museum)))
+            myGraph.add((URIRef(owners['Museo di Palazzo Poggi']), RDF.type, URIRef(museum)))
+            myGraph.add((URIRef(owners['Museo di Storia Naturale di Verona']), RDF.type, URIRef(museum)))
 
-        #produce triple on place names and uris
-        for k, v in places.items():
-            myGraph.add((URIRef(v), name, Literal(k)))
-            placeId = re.search(r"(Q\d+)", v)
+            #produce triple on place names and uris
+            for k, v in places.items():
+                myGraph.add((URIRef(v), name, Literal(k)))
+                placeId = re.search(r"(Q\d+)", v)
 
-            if placeId:
-                placeId = placeId.group()
-                myGraph.add((URIRef(v), id, Literal(placeId)))
+                if placeId:
+                    placeId = placeId.group()
+                    myGraph.add((URIRef(v), id, Literal(placeId)))
 
-        myGraph.add((URIRef(places['Bologna']), RDF.type, URIRef('https://schema.org/City')))
-        myGraph.add((URIRef(places['Bergamo']), RDF.type, URIRef('https://schema.org/City')))
-        myGraph.add((URIRef(places['Verona']), RDF.type, URIRef('https://schema.org/City')))
-        myGraph.add((URIRef(places["Ozzano dell'Emilia"]), RDF.type, URIRef('https://schema.org/City')))
+            myGraph.add((URIRef(places['Bologna']), RDF.type, URIRef('https://schema.org/City')))
+            myGraph.add((URIRef(places['Bergamo']), RDF.type, URIRef('https://schema.org/City')))
+            myGraph.add((URIRef(places['Verona']), RDF.type, URIRef('https://schema.org/City')))
+            myGraph.add((URIRef(places["Ozzano dell'Emilia"]), RDF.type, URIRef('https://schema.org/City')))
 
-        return MetadataUploadHandler.uploadToGrDb(self, myGraph)
+            MetadataUploadHandler.uploadToGrDb(self, myGraph)
+            return True
 
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
+            return False
 
     def makeClassName(self, name: str) ->str:
         n = name.split()
-        newClassName = n[0].lower()
+        newClassName = n[0]
         if len(n)>1:
             newClassName = newClassName+n[1].capitalize()
         return newClassName
 
 
 class ProcessDataUploadHandler(UploadHandler):
-    def __init__(self, dbPathOrUrl, DBPath):
-        super().__init__(dbPathOrUrl)
-        super().setDbPathOrUrl(DBPath)
-        super().getDbPathOrUrl()
+#    def __init__(self, dbPathOrUrl, pathOrUrl):
+#        super().__init__()
+#        super().setDbPathOrUrl(pathOrUrl)
 
     def uploadToRelDb(self, data: DataFrame, name: str):
         with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
             return data.to_sql(name, con, if_exists='replace', index = False)
 
     def pushDataToDb(self, path: str) -> bool:
-        with open(path, 'r', encoding='utf-8') as f:
-            data = load(f)
-
-        acquisition_records = []
-        processing_records = []
-        modelling_records = []
-        optimising_records = []
-        exporting_records = []
-        objectIds = []
-        rows = []
-        activities = set()
-
         try:
-            # Iterate through the list of object
-            for item in data:
-                objectId = item.get("object id", None)
-                objectIds.append(objectId)
+            with open(path, 'r', encoding='utf-8') as f:
+                data = load(f)
 
-                # Ensure the current item is a dictionary and contains "acquisition"
-                if isinstance(item, dict) and "acquisition" in item:
-                    acquisition = item["acquisition"]
-                    # Ensure "acquisition" is a dictionary
-                    if isinstance(acquisition, dict):
-                        # Add "object id" for context and merge with the acquisition data
-                        acquisition_records.append(acquisition)
+            activity_mapping = {
+                "acquisition": [],
+                "processing": [],
+                "modelling": [],
+                "optimising": [],
+                "exporting": []
+            }
 
-                # Ensure the current item is a dictionary and contains "processing"
-                if isinstance(item, dict) and "processing" in item:
-                    processing = item["processing"]
-                    # Ensure "processing" is a dictionary
-                    if isinstance(processing, dict):
-                        processing_records.append(processing)
+            tools_data = []  # List to store tool data, because it has several values in the same cell
 
-                # Ensure the current item is a dictionary and contains "modelling"
-                if isinstance(item, dict) and "modelling" in item:
-                    modelling = item["modelling"]
-                    # Ensure "modelling" is a dictionary
-                    if isinstance(modelling, dict):
-                        modelling_records.append(modelling)
+            for obj in data:
+                object_id = obj["object id"]
 
-                # Ensure the current item is a dictionary and contains "optimising"
-                if isinstance(item, dict) and "optimising" in item:
-                    optimising = item["optimising"]
-                    # Ensure "optimising" is a dictionary
-                    if isinstance(optimising, dict):
-                        optimising_records.append(optimising)
+                for activity_type in activity_mapping:
+                    if activity_type in obj:
+                        activity_data = obj[activity_type]
 
-                # Ensure the current item is a dictionary and contains "exporting"
-                if isinstance(item, dict) and "exporting" in item:
-                    exporting = item["exporting"]
-                    # Ensure "optimising" is a dictionary
-                    if isinstance(exporting, dict):
-                        exporting_records.append(exporting)
+                        # Create a unique identifier for each activity
+                        activity_id = f"{object_id}_{activity_type}"
+                        new_activity = {
+                            "activity_id": activity_id,
+                            "type": activity_type,
+                            "object_id": object_id,
+                            "responsible_institute": activity_data.get("responsible institute", ""),
+                            "responsible_person": activity_data.get("responsible person", ""),
+                            "start_date": activity_data.get("start date", ""),
+                            "end_date": activity_data.get("end date", "")
+                        }
 
-                if isinstance(item, dict):
-                    activities.update(item.keys())
-                    activities.discard("object id")
+                        # Add the technique column in case the data is about acquisition
+                        if activity_type == "acquisition":
+                            new_activity["technique"] = activity_data.get("technique", "")
 
-                object_id = item.get("object id", None)
-                # Iterate through the dynamically extracted activities
-                # And build a list of dictionaries consisting of "object id", "activity", and the "tool" used
-                for activity in activities:
-                    activity_data = item.get(activity, {})
-                    tools = activity_data.get("tool", [])
-                    # Handle cases where "tools" may be empty or missing
-                    if tools:
-                        for tool in tools:
-                            rows.append({"object id": object_id, "activity": activity, "tool": tool})
-                    else:
-                        # Include a row with no tools if the list is empty
-                        rows.append({"object id": object_id, "activity": activity, "tool": None})
+                        activity_mapping[activity_type].append(new_activity)
 
+                        # Extract tool information and create separate entries
+                        for tool in activity_data.get("tool", []):  # iterating through the list of tools
+                            tools_data.append({
+                                "object_id": object_id,
+                                "activity_id": activity_id,
+                                "tool_name": tool
+                            })
 
-            df_tools = DataFrame(rows)
-            df_tools.dropna(inplace=True)
+            # Create Dataframe for each activity + tools
+            df_acquisition = DataFrame(activity_mapping["acquisition"])
+            df_processing = DataFrame(activity_mapping["processing"])
+            df_modelling = DataFrame(activity_mapping["modelling"])
+            df_optimising = DataFrame(activity_mapping["optimising"])
+            df_exporting = DataFrame(activity_mapping["exporting"])
+            df_tools = DataFrame(tools_data)
+
+            # Uploading the dataframes to relational database.
             ProcessDataUploadHandler.uploadToRelDb(self, df_tools, 'Tools')
-
-            # Adding acquisition records to dataframe
-            df_acquisition = DataFrame(acquisition_records)
-            df_acquisition.insert(0,"Object Id", Series(objectIds, index = None))
-            df_acquisition.insert(6, "activity", "acquisition")
-            df_acquisition.drop('tool', axis = 1, inplace = True)
             ProcessDataUploadHandler.uploadToRelDb(self, df_acquisition,'Acquisition')
-
-            # Adding processing records to dataframe
-            df_processing = DataFrame(processing_records)
-            df_processing.insert(0,"Object Id", Series(objectIds, index = None, dtype = str))
-            df_processing.insert(5, "activity", "processing")
-            df_processing.drop('tool', axis = 1, inplace = True)
             ProcessDataUploadHandler.uploadToRelDb(self, df_processing, 'Processing')
-
-            # Adding modelling records to dataframe
-            df_modelling = DataFrame(modelling_records)
-            df_modelling.insert(0,"Object Id", Series(objectIds, index = None, dtype = str))
-            df_modelling.insert(5, "activity", "modelling")
-            df_modelling.drop('tool', axis=1, inplace = True)
             ProcessDataUploadHandler.uploadToRelDb(self, df_modelling, 'Modelling')
-
-            # Adding optimising records to dataframe
-            df_optimising = DataFrame(optimising_records)
-            df_optimising.insert(0,"Object Id", Series(objectIds, index = None, dtype = str))
-            df_optimising.insert(5, "activity", "optimising")
-            df_optimising.drop('tool', axis=1, inplace = True)
             ProcessDataUploadHandler.uploadToRelDb(self, df_optimising, 'Optimising')
-
-            # Adding exporting records to dataframe
-            df_exporting = DataFrame(exporting_records)
-            df_exporting.insert(0,"Object Id", Series(objectIds, index = None, dtype = str))
-            df_exporting.insert(5, "activity", "exporting")
-            df_exporting.drop('tool', axis=1, inplace = True)
             ProcessDataUploadHandler.uploadToRelDb(self, df_exporting, 'Exporting')
 
             return True
@@ -455,17 +412,443 @@ class ProcessDataUploadHandler(UploadHandler):
             print(f"An unexpected error occurred: {e}")
             return False
 
+
 class QueryHandler(Handler):
-    pass
+    def __init__(self):
+        self.id = id
+
+    def getById(self, id: str) -> DataFrame:
+        endpoint = MetadataUploadHandler.getDbPathOrUrl(self)
+        query = f"""
+        PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+        PREFIX schema: <https://schema.org/>
+        SELECT ?title
+        WHERE {{
+            ?s schema:identifier "{id}".
+            ?s schema:name ?title.
+        }}
+        """
+        df_id = get(endpoint, query, True)
+        if df_id.empty == False:  # Check if the result dataframe is not empty
+            return df_id
+        else:  # In case the dataframe is empty
+            print("There is no corresponding results for the query")
+            return df_id
+
+
+# queryHandler = QueryHandler()
+# print(queryHandler.getById("Viadfs"))
 
 class MetadataQueryHandler(QueryHandler):
-    pass
+
+    def getAllPeople(self) -> DataFrame:
+        endpoint = MetadataUploadHandler.getDbPathOrUrl(self)
+        query = """
+               PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+               PREFIX schema: <https://schema.org/>
+               SELECT ?id ?person
+               WHERE {
+                    ?s schema:author ?authorId.
+                    ?authorId schema:identifier ?id.
+                    ?authorId schema:name ?person.
+               }
+               """
+        df_personGraph = get(endpoint, query, True)
+
+        # Reading the sql file and querying from 5 tables the column corresponding to person, renaming the column label and
+        # concatenating it with the dataframe extracted from Graph dataframe
+        with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
+            query = '''SELECT "responsible person" FROM Acquisition
+                     UNION
+                     SELECT "responsible person" FROM Exporting
+                     UNION
+                     SELECT "responsible person" FROM Modelling
+                     UNION
+                     SELECT "responsible person" FROM Processing
+                     UNION
+                     SELECT "responsible person" FROM Optimising'''
+            df_personSql = read_sql(query, con).rename(columns={"responsible person": "person"})
+
+        df_persons = concat([df_personSql, df_personGraph], ignore_index=True)
+        df_persons = df_persons.drop(df_persons[df_persons["person"] == ""].index)
+        df_persons = df_persons.reset_index(drop=True)
+        return df_persons
+
+    def getAllCulturalHeritageObjects(self) -> DataFrame:
+        endpoint = MetadataUploadHandler.getDbPathOrUrl(self)
+        query = """
+                    PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+                    PREFIX schema: <https://schema.org/>
+                    PREFIX wikidata: <https://www.wikidata.org/wiki/>
+                    SELECT ?id ?objectName ?type ?author
+                    WHERE {
+                      VALUES ?typeId {
+                        wikidata:Q728502
+                        schema:Book
+                        wikidata:Q181916
+                        wikidata:Q1261026
+                        wikidata:Q85869058
+                        schema:Painting
+                        schema:Map
+                        schema:Manuscript
+                        wikidata:Q1979154 
+                      }   
+                    ?s rdf:type ?typeId.
+                    ?s schema:identifier ?id.
+                    ?s schema:name ?objectName.
+                    ?typeId schema:name ?type.
+                    ?s schema:author ?authorId.
+                    ?authorId schema:name ?author.
+                    }
+                       """
+        df_allCHObjects = get(endpoint, query, True).sort_values(by=["id"])
+        return df_allCHObjects
+
+    def getAuthorsOfCulturalHeritageObject(self, objectId: str) -> DataFrame:
+        endpoint = MetadataUploadHandler.getDbPathOrUrl(self)
+        query = f'''
+                PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+                PREFIX schema: <https://schema.org/>              
+                SELECT ?author
+                WHERE {{
+                       ?s schema:identifier "{objectId}".
+                       ?s schema:author ?authorId.
+                       ?authorId schema:name ?author.
+                }}
+        '''
+        df_authorOFCHObject = get(endpoint, query, True)
+        if df_authorOFCHObject.empty == False:  # Check if the result dataframe is not empty
+            return df_authorOFCHObject
+        else:  # In case the dataframe is empty
+            print("There is no author for this object")
+            return df_authorOFCHObject
+
+    # Get the Objects from the author input
+    def getCulturalHeritageObjectsAuthoredBy(self, personId: str) -> DataFrame:
+        endpoint = endpoint = MetadataUploadHandler.getDbPathOrUrl(self)
+        query = f'''
+                       PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+                       PREFIX schema: <https://schema.org/>              
+                       SELECT ?object ?name
+                       WHERE {{
+                              ?authorId schema:identifier "{personId}".
+                              ?object schema:author ?authorId.
+                              ?object schema:name ?name.
+                       }}
+               '''
+        df_objectByAuthor = get(endpoint, query, True)
+        if df_objectByAuthor.empty == False:
+            return df_objectByAuthor
+        else:
+            print("There is no objects associated with this author")
+            return df_objectByAuthor
+
 
 class ProcessDataQueryHandler(QueryHandler):
-    pass
+
+    # I am not sure if this method is constructed correctly. it is asked to construct a method which returns all the
+    # activities. My method is so naive.
+    # Update: I think I have to SELECT other columns from the database too. Because it makes no sense. to have only
+    # a list of four activities.
+    def getAllActivities(self) -> DataFrame:
+        with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
+            query = """
+                    SELECT 'activity type' FROM Acquisition
+                     UNION
+                    SELECT 'activity type' FROM Exporting
+                     UNION
+                    SELECT 'activity type' FROM Modelling 
+                     UNION
+                    SELECT 'activity type' FROM Processing 
+                     UNION
+                    SELECT 'activity type' FROM Optimising 
+            """
+        df_activities = read_sql(query, con)
+        return df_activities
+
+    def getActivitiesByResponsibleInstitution(self, partialName: str) -> DataFrame:
+        with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
+            query = f"""
+                    SELECT 'activity type' FROM Acquisition WHERE 'responsible institute' LIKE '%{partialName}%'
+                     UNION
+                    SELECT 'activity type' FROM Exporting WHERE 'responsible institute' LIKE '%{partialName}%'
+                     UNION
+                    SELECT 'activity type' FROM Modelling WHERE 'responsible institute' LIKE '%{partialName}%'
+                     UNION
+                    SELECT 'activity type' FROM Processing WHERE 'responsible institute' LIKE '%{partialName}%'
+                     UNION
+                    SELECT 'activity type' FROM Optimising WHERE 'responsible institute' LIKE '%{partialName}%'
+            """
+            df_activityByInstitute = read_sql(query, con)
+        return df_activityByInstitute
+
+    def getActivitiesByResponsiblePerson(self, partialName: str) -> DataFrame:
+        with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
+            query = f"""
+                    SELECT 'activity type' FROM Acquisition WHERE 'responsible person' LIKE '%{partialName}%'
+                     UNION
+                    SELECT 'activity type' FROM Exporting WHERE 'responsible person' LIKE '%{partialName}%'
+                     UNION
+                    SELECT 'activity type' FROM Modelling WHERE 'responsible person' LIKE '%{partialName}%'
+                     UNION
+                    SELECT 'activity type' FROM Processing WHERE 'responsible person' LIKE '%{partialName}%'
+                     UNION
+                    SELECT 'activity type' FROM Optimising WHERE 'responsible person' LIKE '%{partialName}%'
+            """
+            df_activityByPerson = read_sql(query, con)
+        return df_activityByPerson
+
+    def getActivitiesUsingTool(self, partialName: str) -> DataFrame:
+        with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
+            query = f"""
+                    SELECT 'activity type' FROM Tools WHERE 'tool' LIKE '%{partialName}%'
+            """
+            df_activityByTool = read_sql(query, con)
+        return df_activityByTool
+
+    def getActivitiesStartedAfter(self, date: str) -> DataFrame:
+        with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
+            query = f"""
+                    SELECT 'activity type' FROM Acquisition WHERE 'start date' > '%{date}%'
+                     UNION
+                    SELECT 'activity type' FROM Exporting WHERE 'start date' > '%{date}%'
+                     UNION
+                    SELECT 'activity type' FROM Modelling WHERE 'start date' > '%{date}%'
+                     UNION
+                    SELECT 'activity type' FROM Processing WHERE 'start date' > '%{date}%'
+                     UNION
+                    SELECT 'activity type' FROM Optimising WHERE 'start date' > '%{date}%'
+            """
+            df_activityBySD = read_sql(query, con)
+        return df_activityBySD
+
+    def getActivitiesEndedBefore(self, date: str) -> DataFrame:
+        with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
+            query = f"""
+                    SELECT 'activity type' FROM Acquisition WHERE 'end date' < '%{date}%'
+                     UNION
+                    SELECT 'activity type' FROM Exporting WHERE 'end date' < '%{date}%'
+                     UNION
+                    SELECT 'activity type' FROM Modelling WHERE 'end date' < '%{date}%'
+                     UNION
+                    SELECT 'activity type' FROM Processing WHERE 'end date' < '%{date}%'
+                     UNION
+                    SELECT 'activity type' FROM Optimising WHERE 'end date' < '%{date}%'
+            """
+            df_activityBySD = read_sql(query, con)
+        return df_activityBySD
+
+    def getAcquisitionsByTechnique(self, partialName: str) -> DataFrame:
+        with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
+            query = f"""
+                    SELECT 'Object Id', 'responsible institute' FROM Acquisition WHERE technique LIKE '%{partialName}%'
+            """
+            df_acquisitionByTech = read_sql(query, con)
+        return df_acquisitionByTech
+
 
 class BasicMashup:
-    pass
+    def __init__(self):
+        self.metadataQuery = list()
+        self.processQuery = list()
+
+        # Mapping of types to their corresponding classes to construct related classes dynamically
+        self.type_to_class = {
+            "Map": Map,
+            "Model": Model,
+            "Painting": Painting,
+            "Specimen": Specimen,
+            "Herbarium": Herbarium,
+            "PrintedMaterial": PrintedMaterial,
+            "PrintedVolume": PrintedVolume,
+            "ManuscriptVolume": ManuscriptVolume,
+            "ManuscriptPlate": ManuscriptPlate,
+            "NauticalChart": NauticalChart,
+        }
+
+        # Mapping the activities to their corresponding classes
+
+        self.activity_to_class = {
+            "acquisition": Acquisition,
+            "exporting": Exporting,
+            "modelling": Modelling,
+            "optimising": Optimising
+        }
+
+    def cleanMetadataHandlers(self) -> bool:
+        try:
+            self.metadataQuery.clear()
+            return True
+        except:
+            return False
+
+    def cleanProcessHandlers(self) -> bool:
+        try:
+            self.processQuery.clear()
+            return True
+        except:
+            return False
+
+    def addMetadataHandler(self, handler: MetadataQueryHandler) -> bool:
+        try:
+            self.metadataQuery.append(handler)
+            return True
+        except:
+            return False
+
+    def addProcessHandler(self, handler: ProcessDataQueryHandler) -> bool:
+        try:
+            self.processQuery.append(handler)
+            return True
+        except:
+            return False
+
+    def getEntityById(self, id: str) -> IdentifiableEntity or None:
+
+        for metadata_handler in self.metadataQuery:
+            # Query for Cultural Heritage Objects
+            df_ch_objects = metadata_handler.getAllCulturalHeritageObjects()
+            match = df_ch_objects[df_ch_objects["id"] == id]
+            if not match.empty:
+                row = match.iloc[0]
+
+                # Dynamically construct the object based on the type
+                entity_class = self.type_to_class.get(row["type"])
+                if entity_class:
+                    return entity_class(id=row["id"], title=row["objectName"])
+
+            # Query for person
+            df_people = metadata_handler.getAllPeople()
+            match = df_people[df_people["id"] == id]
+            if not match.empty:
+                row = match.iloc[0]
+                return Person(id=row["id"], name=row["person"])
+
+        # If no match is found
+        return None
+
+    def getAllPeople(self) -> list[Person]:
+        allPeople = []
+        # Iterate through all MetadataQueryHandler objects
+        # Although there should be one object in the list
+        for metadata_handler in self.metadataQuery:
+            # Getting the dataframe of the all people
+            df_people = metadata_handler.getAllPeople()
+
+            # Convert the data of each row and to the object Person and add them to the list
+            for _, row in df_people.iterrows():
+                person = Person(id=row["id"], name=row["person"])
+                allPeople.append(person)
+
+        return allPeople
+
+    def getAllCulturalHeritageObjects(self) -> list[CulturalHeritageObject]:
+        allCHObjects = []
+
+        # Next is just like the previous method. except for the get method from the MetaDataQueryHandler class
+        for metadata_handler in self.metadataQuery:
+            df_CHObjects = metadata_handler.getAllCulturalHeritageObjects()
+
+            for _, row in df_CHObjects.iterrows():
+                # Dynamically construct the object based on the type
+                entity_class = self.type_to_class.get(row["type"])
+
+                if entity_class:
+                    allCHObjects.append(entity_class(id=row["id"], title=row["objectName"], authors=row["author"]))
+
+        return allCHObjects
+
+    def getAuthorsOfCulturalHeritageObject(self, objectId: str) -> list[Person]:
+        allAuthors = []
+
+        for metadata_handler in self.metadataQuery:
+            df_authors = metadata_handler.getAuthorsOfCulturalHeritageObject(objectId)
+
+            for _, row in df_authors.iterrows():
+                author = Person(id=row["id"], name=row["person"])
+                allAuthors.append(author)
+
+        return allAuthors
+
+    def getCulturalHeritageObjectsAuthoredBy(self, personId: str) -> list[CulturalHeritageObject]:
+        CHObjects = []
+
+        for metadata_handler in self.metadataQuery:
+            df_CHObjects = metadata_handler.getCulturalHeritageObjectsAuthoredBy(personId)
+
+            for _, row in df_CHObjects.iterrows():
+                entity_class = self.type_to_class.get(row["type"])
+
+                if entity_class:
+                    CHObjects.append(entity_class(id=row["id"], title=row["objectName"], authors=row["author"]))
+
+        return CHObjects
+
+    def getAllActivities(self) -> list[Activity]:
+        allActivities = []
+
+        # Iterate through the list of Process Query objects (Like metadata query objects)
+        for process_handler in self.processQuery:
+            df_allActivities = process_handler.getAllActivities()
+
+            for _, row in df_allActivities.iterrows():
+                activity_class = self.activity_to_class.get(row["activity type"])
+
+                if activity_class:
+                    allActivities.append(activity_class())  # I think we have to fully implement the activity dataframe
+                    # and add other parameters ro build the corresponding object
+        return allActivities
+
+    def getActivitiesByResponsibleInstitution(self, partialName: str) -> list[Activity]:
+        activityByInst = []
+
+        for process_handler in self.processQuery:
+            df_activityByInst = process_handler.getActivitiesByResponsibleInstitution(partialName)
+
+            for _, row in df_activityByInst.iterrows():
+                activity_class = self.activity_to_class.get(row["activity type"])
+
+                if activity_class:
+                    activityByInst.append(activity_class())  # Probably Here also we need some more information.
+
+        return activityByInst
+
+    def getActivitiesByResponsiblePerson(self, partialName: str) -> list[Activity]:
+        activityByPers = []
+
+        for process_handler in self.processQuery:
+            df_activityByPers = process_handler.getActivitiesByResponsiblePerson(partialName)
+
+            for _, row in df_activityByPers.iterrows():
+                activity_class = self.activity_to_class.get(row["activity type"])
+
+                if activity_class:
+                    activityByPers.append(activity_class())  # Probably Here also we need some more information.
+
+        return activityByPers
+
+    def getActivitiesUsingTool(self, partialName: str) -> list[Activity]:
+        pass
+
+    def getActivitiesStartedAfter(self, date: str) -> list[Activity]:
+        pass
+
+    def getActivitiesEndedBefore(self, date: str) -> list[Activity]:
+        pass
+
+    def getAcquisitionsByTechnique(self, partialName: str) -> list[Acquisition]:
+        pass
+
 
 class AdvancedMashup(BasicMashup):
-    pass
+    def getActivitiesOnObjectsAuthoredBy(self, personId: str) -> list[Activity]:
+        pass
+
+    def getObjectsHandledByResponsiblePerson(self, partialName: str) -> list[CulturalHeritageObject]:
+        pass
+
+    def getObjectsHandledByResponsibleInstitution(self, partialName: str) -> list[CulturalHeritageObject]:
+        pass
+
+    def getAuthorsOfObjectsAcquiredInTimeFrame(self, start: str, end: str) -> list[Person]:
+        pass

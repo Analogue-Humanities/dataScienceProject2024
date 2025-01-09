@@ -1,35 +1,29 @@
-from impl import Handler, MetadataUploadHandler, ProcessDataUploadHandler
-import pandas as pd
+from impl import MetadataUploadHandler, ProcessDataUploadHandler, ProcessDataQueryHandler, MetadataQueryHandler
 
-hand = Handler()
-
-print(hand.getDbPathOrUrl())
-
-path1 = 'data/process.json'
-hand.setDbPathOrUrl(path1)
-file1 = hand.getDbPathOrUrl()
-print(file1)
-
-process = ProcessDataUploadHandler()
-
-df = process.pushDataToDb(file1)
-print(df)
-
-#df.to_csv('test.csv')
-
-path2 = 'data/meta.csv'
-hand.setDbPathOrUrl(path2)
-hand.getDbPathOrUrl()
-
-meta = MetadataUploadHandler()
-
-test = meta.pushDataToDb(hand.getDbPathOrUrl())
-print(test)
-
-#########################################################################################
-# The way it is implemented in the project specifications
-
+# Once all the classes are imported, first create the relational
+# database using the related source data
 rel_path = "relational.db"
 process = ProcessDataUploadHandler()
 process.setDbPathOrUrl(rel_path)
 process.pushDataToDb("data/process.json")
+# Please remember that one could, in principle, push one or more files
+# calling the method one or more times (even calling the method twice
+# specifying the same file!)
+
+# Then, create the graph database (remember first to run the
+# Blazegraph instance) using the related source data
+grp_endpoint = "http://127.0.0.1:9999/blazegraph/sparql"
+metadata = MetadataUploadHandler()
+metadata.setDbPathOrUrl(grp_endpoint)
+metadata.pushDataToDb("data/meta.csv")
+# Please remember that one could, in principle, push one or more files
+# calling the method one or more times (even calling the method twice
+# specifying the same file!)
+
+# In the next passage, create the query handlers for both
+# the databases, using the related classes
+process_qh = ProcessDataQueryHandler()
+process_qh.setDbPathOrUrl(rel_path)
+
+metadata_qh = MetadataQueryHandler()
+metadata_qh.setDbPathOrUrl(grp_endpoint)

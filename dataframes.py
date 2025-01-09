@@ -1,6 +1,9 @@
 from datashader.datashape import Categorical
 
-from impl import Handler, MetadataUploadHandler, ProcessDataUploadHandler
+from impl import (Handler, MetadataUploadHandler, ProcessDataUploadHandler, IdentifiableEntity, Person,
+                  CulturalHeritageObject, Activity, Acquisition, Map, Model, PrintedMaterial, PrintedVolume,
+                  ManuscriptVolume, ManuscriptPlate, NauticalChart, Painting, Specimen, Herbarium, Exporting, Modelling,
+                  Optimising)
 from sqlite3 import connect
 from pandas import read_sql, DataFrame, concat
 from sparql_dataframe import get
@@ -29,7 +32,7 @@ class QueryHandler(Handler):
             return df_id
         else: # In case the dataframe is empty
             print("There is no corresponding results for the query")
-            return None
+            return df_id
 
 
 #queryHandler = QueryHandler()
@@ -42,9 +45,10 @@ class MetadataQueryHandler(QueryHandler):
         query = """
                PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
                PREFIX schema: <https://schema.org/>
-               SELECT ?person
+               SELECT ?id ?person
                WHERE {
                     ?s schema:author ?authorId.
+                    ?authorId schema:identifier ?id.
                     ?authorId schema:name ?person.
                }
                """
@@ -75,9 +79,9 @@ class MetadataQueryHandler(QueryHandler):
                     PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
                     PREFIX schema: <https://schema.org/>
                     PREFIX wikidata: <https://www.wikidata.org/wiki/>
-                    SELECT ?id ?objectName
+                    SELECT ?id ?objectName ?type ?author
                     WHERE {
-                      VALUES ?type {
+                      VALUES ?typeId {
                         wikidata:Q728502
                         schema:Book
                         wikidata:Q181916
@@ -88,22 +92,25 @@ class MetadataQueryHandler(QueryHandler):
                         schema:Manuscript
                         wikidata:Q1979154 
                       }   
-                    ?s rdf:type ?type.
+                    ?s rdf:type ?typeId.
                     ?s schema:identifier ?id.
                     ?s schema:name ?objectName.
+                    ?typeId schema:name ?type.
+                    ?s schema:author ?authorId.
+                    ?authorId schema:name ?author.
                     }
                        """
         df_allCHObjects = get(endpoint, query, True).sort_values(by=["id"])
         return df_allCHObjects
 
-    def getAuthorsOfCulturalHeritageObject(self, personId: str) -> DataFrame:
+    def getAuthorsOfCulturalHeritageObject(self, objectId: str) -> DataFrame:
         endpoint = MetadataUploadHandler.getDbPathOrUrl(self)
         query = f'''
                 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
                 PREFIX schema: <https://schema.org/>              
                 SELECT ?author
                 WHERE {{
-                       ?s schema:identifier "{personId}".
+                       ?s schema:identifier "{objectId}".
                        ?s schema:author ?authorId.
                        ?authorId schema:name ?author.
                 }}
@@ -113,17 +120,17 @@ class MetadataQueryHandler(QueryHandler):
             return df_authorOFCHObject
         else: # In case the dataframe is empty
             print("There is no author for this object")
-            return None
+            return df_authorOFCHObject
 
-    # Get t
-    def getCulturalHeritageObjectsAuthoredBy(self, objectId: str) -> DataFrame:
+    # Get the Objects from the author input
+    def getCulturalHeritageObjectsAuthoredBy(self, personId: str) -> DataFrame:
         endpoint = endpoint = MetadataUploadHandler.getDbPathOrUrl(self)
         query = f'''
                        PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
                        PREFIX schema: <https://schema.org/>              
                        SELECT ?object ?name
                        WHERE {{
-                              ?authorId schema:identifier "{objectId}".
+                              ?authorId schema:identifier "{personId}".
                               ?object schema:author ?authorId.
                               ?object schema:name ?name.
                        }}
@@ -133,25 +140,27 @@ class MetadataQueryHandler(QueryHandler):
             return df_objectByAuthor
         else:
             print("There is no objects associated with this author")
-            return None
+            return df_objectByAuthor
 
 
 class ProcessDataQueryHandler(QueryHandler):
 
     # I am not sure if this method is constructed correctly. it is asked to construct a method which returns all the
     # activities. My method is so naive.
+    # Update: I think I have to SELECT other columns from the database too. Because it makes no sense. to have only
+    # a list of four activities.
     def getAllActivities(self) -> DataFrame:
         with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
             query = """
-                    SELECT activity FROM Acquisition
+                    SELECT 'activity type' FROM Acquisition
                      UNION
-                    SELECT activity FROM Exporting
+                    SELECT 'activity type' FROM Exporting
                      UNION
-                    SELECT activity FROM Modelling 
+                    SELECT 'activity type' FROM Modelling 
                      UNION
-                    SELECT activity FROM Processing 
+                    SELECT 'activity type' FROM Processing 
                      UNION
-                    SELECT activity FROM Optimising 
+                    SELECT 'activity type' FROM Optimising 
             """
         df_activities = read_sql(query, con)
         return df_activities
@@ -159,15 +168,15 @@ class ProcessDataQueryHandler(QueryHandler):
     def getActivitiesByResponsibleInstitution(self, partialName: str) -> DataFrame:
         with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
             query = f"""
-                    SELECT activity FROM Acquisition WHERE 'responsible institute' LIKE '%{partialName}%'
+                    SELECT 'activity type' FROM Acquisition WHERE 'responsible institute' LIKE '%{partialName}%'
                      UNION
-                    SELECT activity FROM Exporting WHERE 'responsible institute' LIKE '%{partialName}%'
+                    SELECT 'activity type' FROM Exporting WHERE 'responsible institute' LIKE '%{partialName}%'
                      UNION
-                    SELECT activity FROM Modelling WHERE 'responsible institute' LIKE '%{partialName}%'
+                    SELECT 'activity type' FROM Modelling WHERE 'responsible institute' LIKE '%{partialName}%'
                      UNION
-                    SELECT activity FROM Processing WHERE 'responsible institute' LIKE '%{partialName}%'
+                    SELECT 'activity type' FROM Processing WHERE 'responsible institute' LIKE '%{partialName}%'
                      UNION
-                    SELECT activity FROM Optimising WHERE 'responsible institute' LIKE '%{partialName}%'
+                    SELECT 'activity type' FROM Optimising WHERE 'responsible institute' LIKE '%{partialName}%'
             """
             df_activityByInstitute = read_sql(query, con)
         return df_activityByInstitute
@@ -175,15 +184,15 @@ class ProcessDataQueryHandler(QueryHandler):
     def getActivitiesByResponsiblePerson(self, partialName: str) -> DataFrame:
         with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
             query = f"""
-                    SELECT activity FROM Acquisition WHERE 'responsible person' LIKE '%{partialName}%'
+                    SELECT 'activity type' FROM Acquisition WHERE 'responsible person' LIKE '%{partialName}%'
                      UNION
-                    SELECT activity FROM Exporting WHERE 'responsible person' LIKE '%{partialName}%'
+                    SELECT 'activity type' FROM Exporting WHERE 'responsible person' LIKE '%{partialName}%'
                      UNION
-                    SELECT activity FROM Modelling WHERE 'responsible person' LIKE '%{partialName}%'
+                    SELECT 'activity type' FROM Modelling WHERE 'responsible person' LIKE '%{partialName}%'
                      UNION
-                    SELECT activity FROM Processing WHERE 'responsible person' LIKE '%{partialName}%'
+                    SELECT 'activity type' FROM Processing WHERE 'responsible person' LIKE '%{partialName}%'
                      UNION
-                    SELECT activity FROM Optimising WHERE 'responsible person' LIKE '%{partialName}%'
+                    SELECT 'activity type' FROM Optimising WHERE 'responsible person' LIKE '%{partialName}%'
             """
             df_activityByPerson = read_sql(query, con)
         return df_activityByPerson
@@ -191,7 +200,7 @@ class ProcessDataQueryHandler(QueryHandler):
     def getActivitiesUsingTool(self, partialName: str) -> DataFrame:
         with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
             query = f"""
-                    SELECT activity FROM Tools WHERE 'tool' LIKE '%{partialName}%'
+                    SELECT 'activity type' FROM Tools WHERE 'tool' LIKE '%{partialName}%'
             """
             df_activityByTool = read_sql(query, con)
         return df_activityByTool
@@ -199,15 +208,15 @@ class ProcessDataQueryHandler(QueryHandler):
     def getActivitiesStartedAfter(self, date: str) -> DataFrame:
         with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
             query = f"""
-                    SELECT activity FROM Acquisition WHERE 'start date' > '%{date}%'
+                    SELECT 'activity type' FROM Acquisition WHERE 'start date' > '%{date}%'
                      UNION
-                    SELECT activity FROM Exporting WHERE 'start date' > '%{date}%'
+                    SELECT 'activity type' FROM Exporting WHERE 'start date' > '%{date}%'
                      UNION
-                    SELECT activity FROM Modelling WHERE 'start date' > '%{date}%'
+                    SELECT 'activity type' FROM Modelling WHERE 'start date' > '%{date}%'
                      UNION
-                    SELECT activity FROM Processing WHERE 'start date' > '%{date}%'
+                    SELECT 'activity type' FROM Processing WHERE 'start date' > '%{date}%'
                      UNION
-                    SELECT activity FROM Optimising WHERE 'start date' > '%{date}%'
+                    SELECT 'activity type' FROM Optimising WHERE 'start date' > '%{date}%'
             """
             df_activityBySD = read_sql(query, con)
         return df_activityBySD
@@ -215,15 +224,15 @@ class ProcessDataQueryHandler(QueryHandler):
     def getActivitiesEndedBefore(self, date: str) -> DataFrame:
         with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
             query = f"""
-                    SELECT activity FROM Acquisition WHERE 'end date' < '%{date}%'
+                    SELECT 'activity type' FROM Acquisition WHERE 'end date' < '%{date}%'
                      UNION
-                    SELECT activity FROM Exporting WHERE 'end date' < '%{date}%'
+                    SELECT 'activity type' FROM Exporting WHERE 'end date' < '%{date}%'
                      UNION
-                    SELECT activity FROM Modelling WHERE 'end date' < '%{date}%'
+                    SELECT 'activity type' FROM Modelling WHERE 'end date' < '%{date}%'
                      UNION
-                    SELECT activity FROM Processing WHERE 'end date' < '%{date}%'
+                    SELECT 'activity type' FROM Processing WHERE 'end date' < '%{date}%'
                      UNION
-                    SELECT activity FROM Optimising WHERE 'end date' < '%{date}%'
+                    SELECT 'activity type' FROM Optimising WHERE 'end date' < '%{date}%'
             """
             df_activityBySD = read_sql(query, con)
         return df_activityBySD
@@ -233,9 +242,215 @@ class ProcessDataQueryHandler(QueryHandler):
             query = f"""
                     SELECT 'Object Id', 'responsible institute' FROM Acquisition WHERE technique LIKE '%{partialName}%'
             """
+            df_acquisitionByTech = read_sql(query, con)
+        return df_acquisitionByTech
+
+class BasicMashup:
+    def __init__(self):
+        self.metadataQuery = list()
+        self.processQuery = list()
+
+        # Mapping of types to their corresponding classes to construct related classes dynamically
+        self.type_to_class = {
+            "Map": Map,
+            "Model": Model,
+            "Painting": Painting,
+            "Specimen": Specimen,
+            "Herbarium": Herbarium,
+            "PrintedMaterial": PrintedMaterial,
+            "PrintedVolume": PrintedVolume,
+            "ManuscriptVolume": ManuscriptVolume,
+            "ManuscriptPlate": ManuscriptPlate,
+            "NauticalChart": NauticalChart,
+        }
+
+        # Mapping the activities to their corresponding classes
+
+        self.activity_to_class = {
+            "acquisition": Acquisition,
+            "exporting": Exporting,
+            "modelling": Modelling,
+            "optimising": Optimising
+        }
+
+    def cleanMetadataHandlers(self) -> bool:
+        try:
+            self.metadataQuery.clear()
+            return True
+        except:
+            return False
+
+    def cleanProcessHandlers(self) -> bool:
+        try:
+            self.processQuery.clear()
+            return True
+        except:
+            return False
+
+    def addMetadataHandler(self, handler: MetadataQueryHandler) -> bool:
+        try:
+            self.metadataQuery.append(handler)
+            return True
+        except:
+            return False
+
+    def addProcessHandler(self, handler: ProcessDataQueryHandler) -> bool:
+        try:
+            self.processQuery.append(handler)
+            return True
+        except:
+            return False
+
+    def getEntityById(self, id: str) -> IdentifiableEntity or None:
+
+        for metadata_handler in self.metadataQuery:
+            # Query for Cultural Heritage Objects
+            df_ch_objects = metadata_handler.getAllCulturalHeritageObjects()
+            match = df_ch_objects[df_ch_objects["id"] == id]
+            if not match.empty:
+                row = match.iloc[0]
+
+                # Dynamically construct the object based on the type
+                entity_class = self.type_to_class.get(row["type"])
+                if entity_class:
+                    return entity_class(id=row["id"], title=row["objectName"])
+
+            # Query for person
+            df_people = metadata_handler.getAllPeople()
+            match = df_people[df_people["id"] == id]
+            if not match.empty:
+                row = match.iloc[0]
+                return Person(id=row["id"], name=row["person"])
+
+        # If no match is found
+        return None
+
+    def getAllPeople(self) -> list[Person]:
+        allPeople = []
+        # Iterate through all MetadataQueryHandler objects
+        # Although there should be one object in the list
+        for metadata_handler in self.metadataQuery:
+            # Getting the dataframe of the all people
+            df_people = metadata_handler.getAllPeople()
+
+            # Convert the data of each row and to the object Person and add them to the list
+            for _, row in df_people.iterrows():
+                person = Person(id=row["id"], name=row["person"])
+                allPeople.append(person)
+
+        return allPeople
+
+    def getAllCulturalHeritageObjects(self) -> list[CulturalHeritageObject]:
+        allCHObjects = []
+
+        # Next is just like the previous method. except for the get method from the MetaDataQueryHandler class
+        for metadata_handler in self.metadataQuery:
+            df_CHObjects = metadata_handler.getAllCulturalHeritageObjects()
+
+            for _, row in df_CHObjects.iterrows():
+                # Dynamically construct the object based on the type
+                entity_class = self.type_to_class.get(row["type"])
+
+                if entity_class:
+                    allCHObjects.append(entity_class(id=row["id"], title=row["objectName"], authors=row["author"]))
+
+        return allCHObjects
+
+    def getAuthorsOfCulturalHeritageObject(self, objectId: str) -> list[Person]:
+        allAuthors = []
+
+        for metadata_handler in self.metadataQuery:
+            df_authors = metadata_handler.getAuthorsOfCulturalHeritageObject(objectId)
+
+            for _, row in df_authors.iterrows():
+                author = Person(id=row["id"], name=row["person"])
+                allAuthors.append(author)
+
+        return allAuthors
+
+    def getCulturalHeritageObjectsAuthoredBy(self, personId: str) -> list[CulturalHeritageObject]:
+        CHObjects = []
+
+        for metadata_handler in self.metadataQuery:
+            df_CHObjects = metadata_handler.getCulturalHeritageObjectsAuthoredBy(personId)
+
+            for _, row in df_CHObjects.iterrows():
+                entity_class = self.type_to_class.get(row["type"])
+
+                if entity_class:
+                    CHObjects.append(entity_class(id=row["id"], title=row["objectName"], authors=row["author"]))
+
+        return CHObjects
+
+    def getAllActivities(self) -> list[Activity]:
+        allActivities = []
+
+        # Iterate through the list of Process Query objects (Like metadata query objects)
+        for process_handler in self.processQuery:
+            df_allActivities = process_handler.getAllActivities()
+
+            for _, row in df_allActivities.iterrows():
+                activity_class = self.activity_to_class.get(row["activity type"])
+
+                if activity_class:
+                    allActivities.append(activity_class()) # I think we have to fully implement the activity dataframe
+                    # and add other parameters ro build the corresponding object
+        return allActivities
+
+    def getActivitiesByResponsibleInstitution(self, partialName: str) -> list[Activity]:
+        activityByInst = []
+
+        for process_handler in self.processQuery:
+            df_activityByInst = process_handler.getActivitiesByResponsibleInstitution(partialName)
+
+            for _, row in df_activityByInst.iterrows():
+                activity_class = self.activity_to_class.get(row["activity type"])
+
+                if activity_class:
+                    activityByInst.append(activity_class()) # Probably Here also we need some more information.
+            
+        return activityByInst
+
+    def getActivitiesByResponsiblePerson(self, partialName: str) -> list[Activity]:
+        activityByPers = []
+
+        for process_handler in self.processQuery:
+            df_activityByPers = process_handler.getActivitiesByResponsiblePerson(partialName)
+
+            for _, row in df_activityByPers.iterrows():
+                activity_class = self.activity_to_class.get(row["activity type"])
+
+                if activity_class:
+                    activityByPers.append(activity_class())  # Probably Here also we need some more information.
+
+        return activityByPers
+
+    def getActivitiesUsingTool(self, partialName: str) -> list[Activity]:
+        pass
+
+    def getActivitiesStartedAfter(self, date: str) -> list[Activity]:
+        pass
+
+    def getActivitiesEndedBefore(self, date: str) -> list[Activity]:
+        pass
+
+    def getAcquisitionsByTechnique(self, partialName: str) -> list[Acquisition]:
+        pass
 
 
 
+class AdvancedMashup(BasicMashup):
+    def getActivitiesOnObjectsAuthoredBy(self, personId: str) -> list[Activity]:
+        pass
+
+    def getObjectsHandledByResponsiblePerson(self, partialName: str) -> list[CulturalHeritageObject]:
+        pass
+
+    def getObjectsHandledByResponsibleInstitution(self, partialName: str) -> list[CulturalHeritageObject]:
+        pass
+
+    def getAuthorsOfObjectsAcquiredInTimeFrame(self, start: str, end: str) -> list[Person]:
+        pass
 
 #qu = QueryHandler()
 #print(qu.getById("1"))
