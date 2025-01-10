@@ -160,11 +160,13 @@ class MetadataUploadHandler(UploadHandler):
         endpoint = MetadataUploadHandler.getDbPathOrUrl(self)
         store.open((endpoint, endpoint))
 
-        for s, p, o in graph:
-            ask_query = f"ASK {{ <{s}> <{p}> <{o}> }}"
-            result = store.query(ask_query)
-            if not bool(result):
-                store.add((s, p, o))
+        for triple in graph.triples((None, None, None)):
+            # Check if the triple already exists
+            query = f"ASK {{ {triple[0].n3()} {triple[1].n3()} {triple[2].n3()} }}"  # Construct the ASK query
+            result = store.query(query)
+
+            if not bool(result):  # If the triple doesn't exist, add it
+                store.add(triple)
 
         store.close()
         return store
@@ -313,10 +315,10 @@ class MetadataUploadHandler(UploadHandler):
                     placeId = placeId.group()
                     myGraph.add((URIRef(v), id, Literal(placeId)))
 
-            myGraph.add((URIRef(places['Bologna']), RDF.type, URIRef('https://schema.org/City')))
-            myGraph.add((URIRef(places['Bergamo']), RDF.type, URIRef('https://schema.org/City')))
-            myGraph.add((URIRef(places['Verona']), RDF.type, URIRef('https://schema.org/City')))
-            myGraph.add((URIRef(places["Ozzano dell'Emilia"]), RDF.type, URIRef('https://schema.org/City')))
+            myGraph.add((URIRef(places['Bologna']), RDF.type, URIRef(city)))
+            myGraph.add((URIRef(places['Bergamo']), RDF.type, URIRef(city)))
+            myGraph.add((URIRef(places['Verona']), RDF.type, URIRef(city)))
+            myGraph.add((URIRef(places["Ozzano dell'Emilia"]), RDF.type, URIRef(city)))
 
             MetadataUploadHandler.uploadToGrDb(self, myGraph)
             return True
@@ -387,7 +389,8 @@ class ProcessDataUploadHandler(UploadHandler):
                             tools_data.append({
                                 "object_id": object_id,
                                 "activity_id": activity_id,
-                                "tool_name": tool
+                                "tool_name": tool,
+                                "activity_type": activity_type
                             })
 
             # Create Dataframe for each activity + tools
