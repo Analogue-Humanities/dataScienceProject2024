@@ -1,6 +1,7 @@
 # Defining all the necessary classes of the project
 from json import load
-from pandas import DataFrame, read_csv, read_sql, concat
+from numpy import nan
+from pandas import DataFrame, read_csv, read_sql, merge
 from sqlite3 import connect
 from rdflib import Graph, URIRef, Literal, RDF
 from rdflib.plugins.stores.sparqlstore import SPARQLUpdateStore
@@ -24,7 +25,7 @@ class CulturalHeritageObject(IdentifiableEntity):
         self.owner = owner
         self.place = place
         self.authors = [] # write a list which authors to be appended to it
-
+        self.authors.append(authors)
 
     def getTitle(self):
         return self.title
@@ -80,38 +81,49 @@ class Person(IdentifiableEntity):
         return self.name
 
 class Activity(object):
-    def __init__(self, institute, person, tool, start, end, refersTo):
+    def __init__(self, institute, person, tool, start, end, refersTo, instance):
         self.institute = institute
         self.person = person
-        self.tool = tool
+        self.tool = set()
+        for i in tool:
+            self.tool.add(i)
         self.start = start
         self.end = end
-        self.refersTo = refersTo
+        self.refersTo = instance.getEntityById(refersTo)
 
-    def getResponsibleInstitute(self):
+    def getResponsibleInstitute(self) -> str:
         return self.institute
 
-    def getResponsiblePerson(self):
-        return self.person
+    def getResponsiblePerson(self)  -> str or None:
+        if self.person:
+            return self.person
+        else:
+            return None
 
-    def getTools(self):
+    def getTools(self) -> set:
         return self.tool
 
-    def getStartDate(self):
-        return self.start
+    def getStartDate(self) -> str or None:
+        if self.start:
+            return self.start
+        else:
+            return None
 
-    def getEndDate(self):
-        return self.end
+    def getEndDate(self) -> str or None:
+        if self.end:
+            return self.end
+        else:
+            return None
 
-    def refersTo(self):
+    def refersTo(self) -> CulturalHeritageObject:
         return self.refersTo
 
 class Acquisition(Activity):
-    def __init__(self,technique, institute, person, tool, start, end, refersTo):
-        super().__init__(institute, person, tool, start, end, refersTo)
+    def __init__(self,technique, institute, person, tool, start, end, refersTo, instance):
+        super().__init__(institute, person, tool, start, end, refersTo, instance)
         self.technique = technique
 
-    def getTechnique(self):
+    def getTechnique(self) -> str:
         return self.technique
 
 class Processing(Activity):
@@ -541,10 +553,11 @@ class MetadataQueryHandler(QueryHandler):
         query = f'''
                 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
                 PREFIX schema: <https://schema.org/>              
-                SELECT ?author
+                SELECT ?author ?id
                 WHERE {{
                        ?s schema:identifier "{objectId}".
                        ?s schema:author ?authorId.
+                       ?authorId schema:name ?id.
                        ?authorId schema:name ?author.
                 }}
         '''
@@ -559,15 +572,25 @@ class MetadataQueryHandler(QueryHandler):
     def getCulturalHeritageObjectsAuthoredBy(self, personId: str) -> DataFrame:
         endpoint = endpoint = MetadataUploadHandler.getDbPathOrUrl(self)
         query = f'''
-                       PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
-                       PREFIX schema: <https://schema.org/>              
-                       SELECT ?object ?name
-                       WHERE {{
-                              ?authorId schema:identifier "{personId}".
-                              ?object schema:author ?authorId.
-                              ?object schema:name ?name.
-                       }}
+                PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+                PREFIX schema: <https://schema.org/>              
+                SELECT ?objectId ?title ?type ?author ?date ?owner ?place
+                WHERE {{
+                  ?object schema:author ?authorId.
+                  ?authorId schema:identifier "{personId}".
+                  ?object schema:identifier ?objectId.
+                  ?object schema:name ?title.
+                  ?object rdf:type ?typeId.
+                  ?typeId schema:name ?type.
+                  ?authorId schema:name ?author.
+                  ?object schema:dateCreated ?date.
+                  ?object schema:owns ?ownerId.
+                  ?ownerId schema:name ?owner.
+                  ?object schema:location ?placeId.
+                  ?placeId schema:name ?place.
+                  }}
                '''
+
         df_objectByAuthor = get(endpoint, query, True)
         if df_objectByAuthor.empty == False:
             return df_objectByAuthor
@@ -585,17 +608,41 @@ class ProcessDataQueryHandler(QueryHandler):
     def getAllActivities(self) -> DataFrame:
         with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
             query = """
-                    SELECT 'activity type' FROM Acquisition
-                     UNION
-                    SELECT 'activity type' FROM Exporting
-                     UNION
-                    SELECT 'activity type' FROM Modelling 
-                     UNION
-                    SELECT 'activity type' FROM Processing 
-                     UNION
-                    SELECT 'activity type' FROM Optimising 
+                    SELECT A.activity_id, A.type, A.object_id, A.responsible_person, A.responsible_institute,
+                    A.start_date, A.end_date, A.technique, T.tool_name
+                    FROM Acquisition AS A
+                    LEFT JOIN Tools AS T ON A.activity_id = T.activity_id
+                    UNION
+                    SELECT E.activity_id, E.type, E.object_id, E.responsible_person, E.responsible_institute,
+                    E.start_date, E.end_date, Null As technique, T.tool_name
+                    FROM Exporting AS E
+                    LEFT JOIN Tools AS T ON E.activity_id = T.activity_id
+                    UNION
+                    SELECT M.activity_id, M.type, M.object_id, M.responsible_person, M.responsible_institute,
+                    M.start_date, M.end_date, Null As technique, T.tool_name
+                    FROM Modelling AS M
+                    LEFT JOIN Tools AS T ON M.activity_id = T.activity_id
+                    UNION
+                    SELECT O.activity_id, O.type, O.object_id, O.responsible_person, O.responsible_institute,
+                    O.start_date, O.end_date, Null As technique, T.tool_name
+                    FROM Optimising AS O
+                    LEFT JOIN Tools AS T ON O.activity_id = T.activity_id
+                    UNION
+                    SELECT P.activity_id, P.type, P.object_id, P.responsible_person, P.responsible_institute,
+                    P.start_date, P.end_date, Null As technique, T.tool_name
+                    FROM Processing AS P
+                    LEFT JOIN Tools AS T ON P.activity_id = T.activity_id;
             """
         df_activities = read_sql(query, con)
+
+        df_activities.drop(
+            df_activities[
+                (df_activities["responsible_institute"].isnull() | (df_activities["responsible_institute"] == ""))
+                ].index,
+            inplace=True
+        )
+        df_activities.reset_index(drop=True, inplace=True)
+
         return df_activities
 
     def getActivitiesByResponsibleInstitution(self, partialName: str) -> DataFrame:
@@ -612,6 +659,11 @@ class ProcessDataQueryHandler(QueryHandler):
                     SELECT 'activity type' FROM Optimising WHERE 'responsible institute' LIKE '%{partialName}%'
             """
             df_activityByInstitute = read_sql(query, con)
+            df_activityByInstitute.drop(df_activityByInstitute[df_activityByInstitute["responsible_person"] ==""].index
+                                        &
+                                    df_activityByInstitute[df_activityByInstitute["responsible_institute"] ==""].index,
+                                    inplace= True)
+
         return df_activityByInstitute
 
     def getActivitiesByResponsiblePerson(self, partialName: str) -> DataFrame:
@@ -704,7 +756,8 @@ class BasicMashup:
             "acquisition": Acquisition,
             "exporting": Exporting,
             "modelling": Modelling,
-            "optimising": Optimising
+            "optimising": Optimising,
+            "processing": Processing
         }
 
     def cleanMetadataHandlers(self) -> bool:
@@ -741,14 +794,15 @@ class BasicMashup:
             # Query for Cultural Heritage Objects
             df_ch_objects = metadata_handler.getById(id)
             match = df_ch_objects[df_ch_objects["id"].astype(str) == id]
-            print(match)
+
             if not match.empty:
                 row = match.iloc[0]
 
                 # Dynamically construct the object based on the type
                 entity_class = self.type_to_class.get(row["type"])
                 if entity_class:
-                    return entity_class(id = row["id"], title = row["name"], date = row["date"], owner = row["owner"], place = row["place"], authors = row["author"])
+                    return entity_class(id = row["id"], title = row["name"], date = row["date"], owner = row["owner"],
+                                        place = row["place"], authors = row["author"])
 
             # Query for person
             df_people = metadata_handler.getById(id)
@@ -798,7 +852,7 @@ class BasicMashup:
             df_authors = metadata_handler.getAuthorsOfCulturalHeritageObject(objectId)
 
             for _, row in df_authors.iterrows():
-                author = Person(id=row["id"], name=row["person"])
+                author = Person(id=row["id"], name=row["author"])
                 allAuthors.append(author)
 
         return allAuthors
@@ -813,22 +867,51 @@ class BasicMashup:
                 entity_class = self.type_to_class.get(row["type"])
 
                 if entity_class:
-                    CHObjects.append(entity_class(id=row["id"], title=row["objectName"], authors=row["author"]))
+                    CHObjects.append(entity_class(id=row["objectId"], title=row["title"], authors=row["author"],
+                                                  date=row["date"], owner=row["owner"], place=row["place"]))
 
         return CHObjects
 
     def getAllActivities(self) -> list[Activity]:
         allActivities = []
 
+        tools = []
+        AdMashupIns = AdvancedMashup()
         # Iterate through the list of Process Query objects (Like metadata query objects)
         for process_handler in self.processQuery:
             df_allActivities = process_handler.getAllActivities()
+            df_groupedByTool = (
+                df_allActivities.groupby('activity_id')['tool_name'].agg(lambda x: list(x.unique())).reset_index())
+
+            df_allActivities = merge(
+            df_groupedByTool,
+            df_allActivities[["activity_id", "type", "technique", "responsible_institute",
+            "responsible_person", "start_date", "end_date", "object_id"]], on="activity_id", how='left')
+
+            df_allActivities = df_allActivities.drop_duplicates()
 
             for _, row in df_allActivities.iterrows():
-                activity_class = self.activity_to_class.get(row["activity type"])
+                activity_class = self.activity_to_class.get(row["type"])
 
-                if activity_class:
-                    allActivities.append(activity_class())  # I think we have to fully implement the activity dataframe
+                if activity_class and activity_class == Acquisition:
+                    allActivities.append(activity_class(technique = row["technique"],
+                                                        institute = row["responsible_institute"],
+                                                        person = row["responsible_person"],
+                                                        tool = row["tool_name"],
+                                                        start = row["start_date"],
+                                                        end = row["end_date"],
+                                                        refersTo = row["object_id"],
+                                                        instance = AdMashupIns))  # I think we have to fully implement the activity dataframe
+
+                elif activity_class:
+                    allActivities.append(activity_class(institute = row["responsible_institute"],
+                                                        person = row["responsible_person"],
+                                                        tool = row["tool_name"],
+                                                        start = row["start_date"],
+                                                        end = row["end_date"],
+                                                        refersTo = row["object_id"],
+                                                        instance = AdMashupIns))
+
                     # and add other parameters ro build the corresponding object
         return allActivities
 
