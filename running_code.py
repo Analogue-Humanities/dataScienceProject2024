@@ -42,9 +42,10 @@ mashup.addMetadataHandler(metadata_qh)
 result_6 = mashup.getAllActivities()
 
 #print(result_2.getTitle())
-#print(result_2.getA())
+#print(result_2)
 #print(result_3)
 #print(len(result_4))
-print(result_6[0].refersTo())
+print(result_6[1])
+print(result_6[1].refersTo.getTitle())
 
 

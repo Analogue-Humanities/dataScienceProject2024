@@ -81,7 +81,7 @@ class Person(IdentifiableEntity):
         return self.name
 
 class Activity(object):
-    def __init__(self, institute, person, tool, start, end, refersTo, instance):
+    def __init__(self, institute, person, tool, start, end, refersTo):
         self.institute = institute
         self.person = person
         self.tool = set()
@@ -89,7 +89,7 @@ class Activity(object):
             self.tool.add(i)
         self.start = start
         self.end = end
-        self.refersTo = instance.getEntityById(refersTo)
+        self.refersTo = refersTo
 
     def getResponsibleInstitute(self) -> str:
         return self.institute
@@ -119,8 +119,8 @@ class Activity(object):
         return self.refersTo
 
 class Acquisition(Activity):
-    def __init__(self,technique, institute, person, tool, start, end, refersTo, instance):
-        super().__init__(institute, person, tool, start, end, refersTo, instance)
+    def __init__(self,technique, institute, person, tool, start, end, refersTo):
+        super().__init__(institute, person, tool, start, end, refersTo)
         self.technique = technique
 
     def getTechnique(self) -> str:
@@ -400,8 +400,6 @@ class ProcessDataUploadHandler(UploadHandler):
                 "exporting": []
             }
 
-            tools_data = []  # List to store tool data, because it has several values in the same cell
-
             for obj in data:
                 object_id = obj["object id"]
 
@@ -418,7 +416,8 @@ class ProcessDataUploadHandler(UploadHandler):
                             "responsible_institute": activity_data.get("responsible institute", ""),
                             "responsible_person": activity_data.get("responsible person", ""),
                             "start_date": activity_data.get("start date", ""),
-                            "end_date": activity_data.get("end date", "")
+                            "end_date": activity_data.get("end date", ""),
+                            "tool": "; ".join(activity_data.get("tool", ""))
                         }
 
                         # Add the technique column in case the data is about acquisition
@@ -427,14 +426,6 @@ class ProcessDataUploadHandler(UploadHandler):
 
                         activity_mapping[activity_type].append(new_activity)
 
-                        # Extract tool information and create separate entries
-                        for tool in activity_data.get("tool", []):  # iterating through the list of tools
-                            tools_data.append({
-                                "object_id": object_id,
-                                "activity_id": activity_id,
-                                "tool_name": tool,
-                                "activity_type": activity_type
-                            })
 
             # Create Dataframe for each activity + tools
             df_acquisition = DataFrame(activity_mapping["acquisition"])
@@ -442,10 +433,8 @@ class ProcessDataUploadHandler(UploadHandler):
             df_modelling = DataFrame(activity_mapping["modelling"])
             df_optimising = DataFrame(activity_mapping["optimising"])
             df_exporting = DataFrame(activity_mapping["exporting"])
-            df_tools = DataFrame(tools_data)
 
             # Uploading the dataframes to relational database.
-            ProcessDataUploadHandler.uploadToRelDb(self, df_tools, 'Tools')
             ProcessDataUploadHandler.uploadToRelDb(self, df_acquisition,'Acquisition')
             ProcessDataUploadHandler.uploadToRelDb(self, df_processing, 'Processing')
             ProcessDataUploadHandler.uploadToRelDb(self, df_modelling, 'Modelling')
@@ -609,29 +598,29 @@ class ProcessDataQueryHandler(QueryHandler):
         with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
             query = """
                     SELECT A.activity_id, A.type, A.object_id, A.responsible_person, A.responsible_institute,
-                    A.start_date, A.end_date, A.technique, T.tool_name
+                    A.start_date, A.end_date, A.technique, A.tool
                     FROM Acquisition AS A
-                    LEFT JOIN Tools AS T ON A.activity_id = T.activity_id
+                    
                     UNION
                     SELECT E.activity_id, E.type, E.object_id, E.responsible_person, E.responsible_institute,
-                    E.start_date, E.end_date, Null As technique, T.tool_name
+                    E.start_date, E.end_date, Null As technique, E.tool
                     FROM Exporting AS E
-                    LEFT JOIN Tools AS T ON E.activity_id = T.activity_id
+                    
                     UNION
                     SELECT M.activity_id, M.type, M.object_id, M.responsible_person, M.responsible_institute,
-                    M.start_date, M.end_date, Null As technique, T.tool_name
+                    M.start_date, M.end_date, Null As technique, M.tool
                     FROM Modelling AS M
-                    LEFT JOIN Tools AS T ON M.activity_id = T.activity_id
+                    
                     UNION
                     SELECT O.activity_id, O.type, O.object_id, O.responsible_person, O.responsible_institute,
-                    O.start_date, O.end_date, Null As technique, T.tool_name
+                    O.start_date, O.end_date, Null As technique, O.tool
                     FROM Optimising AS O
-                    LEFT JOIN Tools AS T ON O.activity_id = T.activity_id
+                    
                     UNION
                     SELECT P.activity_id, P.type, P.object_id, P.responsible_person, P.responsible_institute,
-                    P.start_date, P.end_date, Null As technique, T.tool_name
+                    P.start_date, P.end_date, Null As technique, P.tool
                     FROM Processing AS P
-                    LEFT JOIN Tools AS T ON P.activity_id = T.activity_id;
+                    
             """
         df_activities = read_sql(query, con)
 
@@ -641,6 +630,7 @@ class ProcessDataQueryHandler(QueryHandler):
                 ].index,
             inplace=True
         )
+
         df_activities.reset_index(drop=True, inplace=True)
 
         return df_activities
@@ -875,18 +865,9 @@ class BasicMashup:
     def getAllActivities(self) -> list[Activity]:
         allActivities = []
 
-        tools = []
-        AdMashupIns = AdvancedMashup()
         # Iterate through the list of Process Query objects (Like metadata query objects)
         for process_handler in self.processQuery:
             df_allActivities = process_handler.getAllActivities()
-            df_groupedByTool = (
-                df_allActivities.groupby('activity_id')['tool_name'].agg(lambda x: list(x.unique())).reset_index())
-
-            df_allActivities = merge(
-            df_groupedByTool,
-            df_allActivities[["activity_id", "type", "technique", "responsible_institute",
-            "responsible_person", "start_date", "end_date", "object_id"]], on="activity_id", how='left')
 
             df_allActivities = df_allActivities.drop_duplicates()
 
@@ -897,21 +878,20 @@ class BasicMashup:
                     allActivities.append(activity_class(technique = row["technique"],
                                                         institute = row["responsible_institute"],
                                                         person = row["responsible_person"],
-                                                        tool = row["tool_name"],
+                                                        tool = row["tool"].split("; "),
                                                         start = row["start_date"],
                                                         end = row["end_date"],
-                                                        refersTo = row["object_id"],
-                                                        instance = AdMashupIns))  # I think we have to fully implement the activity dataframe
+                                                        refersTo = self.getEntityById(row["object_id"])
+                                                        ))
 
                 elif activity_class:
                     allActivities.append(activity_class(institute = row["responsible_institute"],
                                                         person = row["responsible_person"],
-                                                        tool = row["tool_name"],
+                                                        tool = row["tool"].split("; "),
                                                         start = row["start_date"],
                                                         end = row["end_date"],
-                                                        refersTo = row["object_id"],
-                                                        instance = AdMashupIns))
-
+                                                        refersTo = self.getEntityById(row["object_id"])
+                                                        ))
                     # and add other parameters ro build the corresponding object
         return allActivities
 
