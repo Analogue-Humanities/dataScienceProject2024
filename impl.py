@@ -7,8 +7,6 @@ from rdflib.plugins.stores.sparqlstore import SPARQLUpdateStore
 import re
 from sparql_dataframe import get
 
-
-
 # First of all defining Classes of the UML Data Model
 class IdentifiableEntity(object):
     def __init__(self, id):
@@ -19,13 +17,14 @@ class IdentifiableEntity(object):
 
 # The cultural Heritage Object class definition
 class CulturalHeritageObject(IdentifiableEntity):
-    def __init__(self, id, title, date=None, owner=None,  place=None, authors=None):
+    def __init__(self, id, title, date, owner,  place, authors):
         super().__init__(id)
         self.title = title
         self.date = date
         self.owner = owner
         self.place = place
-        self.authors = authors
+        self.authors = [] # write a list which authors to be appended to it
+
 
     def getTitle(self):
         return self.title
@@ -130,8 +129,8 @@ class Exporting(Activity):
 # Defining operational classes
 # First the Handlers
 class Handler:
-    def __init__(self):
-        self.dbPathOrUrl = "" # The initial value of the dbPathOrUrl
+    def __init__(self, dbPathOrUrl=""):
+        self.dbPathOrUrl = dbPathOrUrl # The initial value of the dbPathOrUrl
 
     def getDbPathOrUrl(self)-> str:
         return self.dbPathOrUrl
@@ -185,7 +184,7 @@ class MetadataUploadHandler(UploadHandler):
         'Specimen' : URIRef("https://www.wikidata.org/wiki/Q85869058"),
         'Painting' : URIRef("https://schema.org/Painting"),
         'Map' : URIRef("https://schema.org/Map"),
-        'ManuscriptVolume' : URIRef("https://schema.org/Manuscript"),
+        'ManuscriptVolume' : URIRef("https://schema.org/ArchiveComponent"),
         'ManuscriptPlate' : URIRef("https://schema.org/Manuscript"),
         'Model' : URIRef("https://www.wikidata.org/wiki/Q1979154")}
 
@@ -205,9 +204,13 @@ class MetadataUploadHandler(UploadHandler):
             "Ozzano dell'Emilia" : "https://www.wikidata.org/wiki/Q29080"
         }
 
+        base_url = "https://github.com/Analogue-Humanities"
+
         library = "https://schema.org/Library"
         museum = "https://schema.org/Museum"
         city = "https://schema.org/City"
+        unknown = base_url+"/Unknown"
+        person = "https://schema.org/Person"
 
         # Attributes
         id = URIRef("https://schema.org/identifier")
@@ -220,10 +223,13 @@ class MetadataUploadHandler(UploadHandler):
         owner = URIRef("https://schema.org/owns")
         place = URIRef("https://schema.org/location")
 
-        base_url = "https://github.com/Analogue-Humanities"
+
         subjects = {}
         types = set()
         authorMapping = {}
+        # Linnaeus VIAF which is added to the database
+        Linnaeus_id = "VIAF:34594730"
+        parenthesis_Pattern = re.compile(r"\(.*?\)")
 
         try:
             metaData = read_csv(path,
@@ -232,21 +238,43 @@ class MetadataUploadHandler(UploadHandler):
 
             for idx, row in metaData.iterrows():
 
-                objTitle = re.sub(r"[,)(]", "", row['Title']).strip().replace(" ","_")
-                subject = URIRef(base_url+"/cHObject/"+objTitle)
-                subjects[row['Id']] = subject
+                # Some data cleansing work
+
+                if row["Author"] == "":
+                    in_row_author = re.search(r'\((.*?),', row["Title"])
+                    if in_row_author and in_row_author.group(1) == "Linnaeus":
+                        metaData.loc[idx, "Author"] = in_row_author.group(1) + f" ({Linnaeus_id})"
+
+                if row["Date"] == "":
+                    in_row_date = re.search(r'\d+', row["Title"])
+                    if in_row_date:
+                        metaData.loc[idx, "Date"] = in_row_date.group(0)
+
+                if parenthesis_Pattern.search(row["Title"]):
+                    metaData.loc[idx, "Title"] = parenthesis_Pattern.sub("", row["Title"]).strip()
+
+                # Updating the dataframe with the cleansed data
+                row["Author"] = metaData.loc[idx, "Author"]
+                row["Date"] = metaData.loc[idx, "Date"]
+                row["Title"] = metaData.loc[idx, "Title"].strip()
+
+                objTitle = row["Title"].replace(" ","_")
+                subject = URIRef(base_url+"/cHObject/"+row["Id"]+"_"+objTitle)
+                #subjects[row['Id']] = subject
                 types.update(row['Type'])
                 newType = MetadataUploadHandler.makeClassName(self, row['Type'])
                 # Add the triples of subject and the type to the Graph
                 myGraph.add((subject, RDF.type, type_classes[newType]))
                 # Adding the literal names of types as they are in the database
-                myGraph.add((type_classes[newType], name, Literal(newType)))
+
+                if (type_classes[newType], name, Literal(newType)) not in myGraph:
+                    myGraph.add((type_classes[newType], name, Literal(newType)))
 
                 # Add th triples of subject and id to the Graph
                 myGraph.add((subject, id, Literal(row['Id'])))
 
                 # Add the triples of subject and title to the Graph
-                myGraph.add((subject, title, Literal(row['Title'].strip())))
+                myGraph.add((subject, title, Literal(row['Title'])))
 
                 # Add date triples
                 myGraph.add((subject, date, Literal(row['Date'])))
@@ -264,6 +292,7 @@ class MetadataUploadHandler(UploadHandler):
                     myGraph.add((subject, author, authorId))
                     myGraph.add((authorId, id, Literal('VIAF:'+viafId)))
                     myGraph.add((authorId, name, Literal(authorName)))
+                    myGraph.add((authorId, RDF.type, URIRef(person)))
 
                 elif authorNameUl:
                     authorName = authorNameUl.group()
@@ -274,9 +303,11 @@ class MetadataUploadHandler(UploadHandler):
                     myGraph.add((subject, author, authorId))
                     myGraph.add((authorId, id, Literal('ULAN:'+ulanId))) # This will be repeated. make a set and put the operation out of the loop
                     myGraph.add((authorId, name, Literal(authorName)))  # This will be repeated. make a set and put the operation out of the loop
+                    myGraph.add((authorId, RDF.type, URIRef(person)))
 
                 else:
-                    myGraph.add((subject, author, Literal('Unknown')))
+                    myGraph.add((subject, author, URIRef(unknown))) # In case there were no value for author
+                    myGraph.add((URIRef(unknown), name, Literal("Unknown")))
 
                 # Produce the RDF of the owner information
                 myGraph.add((subject, owner, URIRef(owners[row['Owner']])))
@@ -417,18 +448,30 @@ class ProcessDataUploadHandler(UploadHandler):
 
 
 class QueryHandler(Handler):
-    def __init__(self):
-        self.id = id
+#    def __init__(self):
+#        self.id = id
 
     def getById(self, id: str) -> DataFrame:
         endpoint = MetadataUploadHandler.getDbPathOrUrl(self)
         query = f"""
         PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
         PREFIX schema: <https://schema.org/>
-        SELECT ?title
+        SELECT ?name ?id ?type ?author ?date ?owner ?place 
         WHERE {{
-            ?s schema:identifier "{id}".
-            ?s schema:name ?title.
+            ?entityId schema:identifier "{id}".
+            ?entityId schema:name ?name.
+          	?entityId schema:identifier ?id.
+         	OPTIONAL {{
+         	          ?entityId rdf:type ?typeId.
+          	          ?typeId schema:name ?type.
+                      ?entityId schema:author ?authorId.
+                      ?authorId schema:name ?author.
+                      ?entityId schema:dateCreated ?date.
+                      ?entityId schema:location ?placeId.
+                      ?placeId schema:name ?place.
+                      ?entityId schema:owns ?ownerId.
+                      ?ownerId schema:name ?owner.}}
+
         }}
         """
         df_id = get(endpoint, query, True)
@@ -438,43 +481,22 @@ class QueryHandler(Handler):
             print("There is no corresponding results for the query")
             return df_id
 
-
-# queryHandler = QueryHandler()
-# print(queryHandler.getById("Viadfs"))
-
 class MetadataQueryHandler(QueryHandler):
 
     def getAllPeople(self) -> DataFrame:
+
         endpoint = MetadataUploadHandler.getDbPathOrUrl(self)
         query = """
                PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
                PREFIX schema: <https://schema.org/>
-               SELECT ?id ?person
+               SELECT ?authorId ?name ?id 
                WHERE {
-                    ?s schema:author ?authorId.
-                    ?authorId schema:identifier ?id.
-                    ?authorId schema:name ?person.
+                    ?authorId rdf:type schema:Person.
+                 	?authorId schema:name ?name.
+                 	?authorId schema:identifier ?id.
                }
                """
-        df_personGraph = get(endpoint, query, True)
-
-        # Reading the sql file and querying from 5 tables the column corresponding to person, renaming the column label and
-        # concatenating it with the dataframe extracted from Graph dataframe
-        with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
-            query = '''SELECT "responsible person" FROM Acquisition
-                     UNION
-                     SELECT "responsible person" FROM Exporting
-                     UNION
-                     SELECT "responsible person" FROM Modelling
-                     UNION
-                     SELECT "responsible person" FROM Processing
-                     UNION
-                     SELECT "responsible person" FROM Optimising'''
-            df_personSql = read_sql(query, con).rename(columns={"responsible person": "person"})
-
-        df_persons = concat([df_personSql, df_personGraph], ignore_index=True)
-        df_persons = df_persons.drop(df_persons[df_persons["person"] == ""].index)
-        df_persons = df_persons.reset_index(drop=True)
+        df_persons = get(endpoint, query, True)
         return df_persons
 
     def getAllCulturalHeritageObjects(self) -> DataFrame:
@@ -483,7 +505,7 @@ class MetadataQueryHandler(QueryHandler):
                     PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
                     PREFIX schema: <https://schema.org/>
                     PREFIX wikidata: <https://www.wikidata.org/wiki/>
-                    SELECT ?id ?objectName ?type ?author
+                    SELECT ?s ?id ?objectName ?type ?author ?date ?owner ?place
                     WHERE {
                       VALUES ?typeId {
                         wikidata:Q728502
@@ -493,16 +515,23 @@ class MetadataQueryHandler(QueryHandler):
                         wikidata:Q85869058
                         schema:Painting
                         schema:Map
+                        schema:ArchiveComponent
                         schema:Manuscript
-                        wikidata:Q1979154 
+                        wikidata:Q1979154
                       }   
-                    ?s rdf:type ?typeId.
-                    ?s schema:identifier ?id.
-                    ?s schema:name ?objectName.
-                    ?typeId schema:name ?type.
-                    ?s schema:author ?authorId.
-                    ?authorId schema:name ?author.
+                      ?s rdf:type ?typeId.
+                      ?typeId schema:name ?type.
+                      ?s schema:identifier ?id.
+                      ?s schema:name ?objectName.
+                      ?s schema:author ?authorId.
+                      ?authorId schema:name ?author.
+                      ?s schema:dateCreated ?date.
+                      ?s schema:owns ?ownerId.
+                      ?ownerId schema:name ?owner.
+                      ?s schema:location ?placeId.
+                      ?placeId schema:name ?place.
                     }
+
                        """
         df_allCHObjects = get(endpoint, query, True).sort_values(by=["id"])
         return df_allCHObjects
@@ -710,22 +739,23 @@ class BasicMashup:
 
         for metadata_handler in self.metadataQuery:
             # Query for Cultural Heritage Objects
-            df_ch_objects = metadata_handler.getAllCulturalHeritageObjects()
-            match = df_ch_objects[df_ch_objects["id"] == id]
+            df_ch_objects = metadata_handler.getById(id)
+            match = df_ch_objects[df_ch_objects["id"].astype(str) == id]
+            print(match)
             if not match.empty:
                 row = match.iloc[0]
 
                 # Dynamically construct the object based on the type
                 entity_class = self.type_to_class.get(row["type"])
                 if entity_class:
-                    return entity_class(id=row["id"], title=row["objectName"])
+                    return entity_class(id = row["id"], title = row["name"], date = row["date"], owner = row["owner"], place = row["place"], authors = row["author"])
 
             # Query for person
-            df_people = metadata_handler.getAllPeople()
+            df_people = metadata_handler.getById(id)
             match = df_people[df_people["id"] == id]
             if not match.empty:
                 row = match.iloc[0]
-                return Person(id=row["id"], name=row["person"])
+                return Person(id = row["id"], name = row["name"])
 
         # If no match is found
         return None
@@ -740,7 +770,7 @@ class BasicMashup:
 
             # Convert the data of each row and to the object Person and add them to the list
             for _, row in df_people.iterrows():
-                person = Person(id=row["id"], name=row["person"])
+                person = Person(id=row["id"], name=row["name"])
                 allPeople.append(person)
 
         return allPeople
@@ -844,6 +874,7 @@ class BasicMashup:
 
 
 class AdvancedMashup(BasicMashup):
+
     def getActivitiesOnObjectsAuthoredBy(self, personId: str) -> list[Activity]:
         pass
 
