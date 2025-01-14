@@ -1,7 +1,6 @@
 # Defining all the necessary classes of the project
 from json import load
-from numpy import nan
-from pandas import DataFrame, read_csv, read_sql, merge
+from pandas import DataFrame, read_csv, read_sql, to_datetime
 from sqlite3 import connect
 from rdflib import Graph, URIRef, Literal, RDF
 from rdflib.plugins.stores.sparqlstore import SPARQLUpdateStore
@@ -597,127 +596,288 @@ class ProcessDataQueryHandler(QueryHandler):
     def getAllActivities(self) -> DataFrame:
         with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
             query = """
-                    SELECT A.activity_id, A.type, A.object_id, A.responsible_person, A.responsible_institute,
-                    A.start_date, A.end_date, A.technique, A.tool
-                    FROM Acquisition AS A
+                    SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                    start_date, end_date, technique, tool
+                    FROM Acquisition
                     
                     UNION
-                    SELECT E.activity_id, E.type, E.object_id, E.responsible_person, E.responsible_institute,
-                    E.start_date, E.end_date, Null As technique, E.tool
-                    FROM Exporting AS E
+                    SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                    start_date, end_date, Null As technique, tool
+                    FROM Exporting
                     
                     UNION
-                    SELECT M.activity_id, M.type, M.object_id, M.responsible_person, M.responsible_institute,
-                    M.start_date, M.end_date, Null As technique, M.tool
-                    FROM Modelling AS M
+                    SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                    start_date, end_date, Null As technique, tool
+                    FROM Modelling
                     
                     UNION
-                    SELECT O.activity_id, O.type, O.object_id, O.responsible_person, O.responsible_institute,
-                    O.start_date, O.end_date, Null As technique, O.tool
-                    FROM Optimising AS O
+                    SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                    start_date, end_date, Null As technique, tool
+                    FROM
                     
                     UNION
-                    SELECT P.activity_id, P.type, P.object_id, P.responsible_person, P.responsible_institute,
-                    P.start_date, P.end_date, Null As technique, P.tool
-                    FROM Processing AS P
+                    SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                    start_date, end_date, Null As technique, tool
+                    FROM Processing
                     
             """
-        df_activities = read_sql(query, con)
+            df_activities = read_sql(query, con)
 
-        df_activities.drop(
-            df_activities[
-                (df_activities["responsible_institute"].isnull() | (df_activities["responsible_institute"] == ""))
-                ].index,
-            inplace=True
-        )
+            df_activities.drop(
+                df_activities[
+                    (df_activities["responsible_institute"].isnull() | (df_activities["responsible_institute"] == ""))
+                    ].index,
+                inplace=True
+            )
 
-        df_activities.reset_index(drop=True, inplace=True)
+            df_activities.reset_index(drop=True, inplace=True)
 
         return df_activities
 
     def getActivitiesByResponsibleInstitution(self, partialName: str) -> DataFrame:
         with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
             query = f"""
-                    SELECT 'activity type' FROM Acquisition WHERE 'responsible institute' LIKE '%{partialName}%'
-                     UNION
-                    SELECT 'activity type' FROM Exporting WHERE 'responsible institute' LIKE '%{partialName}%'
-                     UNION
-                    SELECT 'activity type' FROM Modelling WHERE 'responsible institute' LIKE '%{partialName}%'
-                     UNION
-                    SELECT 'activity type' FROM Processing WHERE 'responsible institute' LIKE '%{partialName}%'
-                     UNION
-                    SELECT 'activity type' FROM Optimising WHERE 'responsible institute' LIKE '%{partialName}%'
+                    SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                    start_date, end_date, technique, tool 
+                    FROM Acquisition
+                    WHERE responsible_institute LIKE '%{partialName}%'
+                    
+                    UNION
+                    SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                    start_date, end_date, Null As technique, tool
+                    FROM Exporting
+                    WHERE responsible_institute LIKE '%{partialName}%'
+                    
+                    UNION
+                    SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                    start_date, end_date, Null As technique, tool
+                    FROM Modelling
+                    WHERE responsible_institute LIKE '%{partialName}%'
+                    
+                    UNION
+                    SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                    start_date, end_date, Null As technique, tool
+                    FROM Optimising
+                    WHERE responsible_institute LIKE '%{partialName}%'
+                    
+                    UNION
+                    SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                    start_date, end_date, Null As technique, tool
+                    FROM Processing
+                    WHERE responsible_institute LIKE '%{partialName}%';
             """
             df_activityByInstitute = read_sql(query, con)
-            df_activityByInstitute.drop(df_activityByInstitute[df_activityByInstitute["responsible_person"] ==""].index
-                                        &
-                                    df_activityByInstitute[df_activityByInstitute["responsible_institute"] ==""].index,
-                                    inplace= True)
+
+            df_activityByInstitute.drop(
+                df_activityByInstitute[
+                    (df_activityByInstitute["responsible_institute"].isnull() | (df_activityByInstitute
+                                                    ["responsible_institute"] == ""))].index,
+                inplace=True
+            )
+
+            df_activityByInstitute.reset_index(drop=True, inplace=True)
 
         return df_activityByInstitute
 
     def getActivitiesByResponsiblePerson(self, partialName: str) -> DataFrame:
         with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
             query = f"""
-                    SELECT 'activity type' FROM Acquisition WHERE 'responsible person' LIKE '%{partialName}%'
-                     UNION
-                    SELECT 'activity type' FROM Exporting WHERE 'responsible person' LIKE '%{partialName}%'
-                     UNION
-                    SELECT 'activity type' FROM Modelling WHERE 'responsible person' LIKE '%{partialName}%'
-                     UNION
-                    SELECT 'activity type' FROM Processing WHERE 'responsible person' LIKE '%{partialName}%'
-                     UNION
-                    SELECT 'activity type' FROM Optimising WHERE 'responsible person' LIKE '%{partialName}%'
-            """
+                               SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                               start_date, end_date, technique, tool 
+                               FROM Acquisition
+                               WHERE responsible_person LIKE '%{partialName}%'
+
+                               UNION
+                               SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                               start_date, end_date, Null As technique, tool
+                               FROM Exporting
+                               WHERE responsible_person LIKE '%{partialName}%'
+
+                               UNION
+                               SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                               start_date, end_date, Null As technique, tool
+                               FROM Modelling
+                               WHERE responsible_person LIKE '%{partialName}%'
+
+                               UNION
+                               SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                               start_date, end_date, Null As technique, tool
+                               FROM Optimising
+                               WHERE responsible_person LIKE '%{partialName}%'
+
+                               UNION
+                               SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                               start_date, end_date, Null As technique, tool
+                               FROM Processing
+                               WHERE responsible_person LIKE '%{partialName}%';
+                       """
             df_activityByPerson = read_sql(query, con)
+
+            df_activityByPerson.drop(
+                df_activityByPerson[
+                    (df_activityByPerson["responsible_institute"].isnull() | (df_activityByPerson
+                                                                    ["responsible_institute"] == ""))].index,
+                inplace=True
+            )
+
+            df_activityByPerson.reset_index(drop=True, inplace=True)
+
         return df_activityByPerson
 
     def getActivitiesUsingTool(self, partialName: str) -> DataFrame:
         with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
             query = f"""
-                    SELECT 'activity type' FROM Tools WHERE 'tool' LIKE '%{partialName}%'
-            """
+                               SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                               start_date, end_date, technique, tool 
+                               FROM Acquisition
+                               WHERE tool LIKE '%{partialName}%'
+
+                               UNION
+                               SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                               start_date, end_date, Null As technique, tool
+                               FROM Exporting
+                               WHERE tool LIKE '%{partialName}%'
+
+                               UNION
+                               SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                               start_date, end_date, Null As technique, tool
+                               FROM Modelling
+                               WHERE tool LIKE '%{partialName}%'
+
+                               UNION
+                               SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                               start_date, end_date, Null As technique, tool
+                               FROM Optimising
+                               WHERE tool LIKE '%{partialName}%'
+
+                               UNION
+                               SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                               start_date, end_date, Null As technique, tool
+                               FROM Processing
+                               WHERE tool LIKE '%{partialName}%';
+                       """
             df_activityByTool = read_sql(query, con)
+
+            df_activityByTool.drop(
+                df_activityByTool[
+                    (df_activityByTool["responsible_institute"].isnull() | (df_activityByTool
+                                           ["responsible_institute"] == ""))].index,inplace=True
+            )
+
+            df_activityByTool.reset_index(drop=True, inplace=True)
+
         return df_activityByTool
+
 
     def getActivitiesStartedAfter(self, date: str) -> DataFrame:
         with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
             query = f"""
-                    SELECT 'activity type' FROM Acquisition WHERE 'start date' > '%{date}%'
-                     UNION
-                    SELECT 'activity type' FROM Exporting WHERE 'start date' > '%{date}%'
-                     UNION
-                    SELECT 'activity type' FROM Modelling WHERE 'start date' > '%{date}%'
-                     UNION
-                    SELECT 'activity type' FROM Processing WHERE 'start date' > '%{date}%'
-                     UNION
-                    SELECT 'activity type' FROM Optimising WHERE 'start date' > '%{date}%'
-            """
+                                SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                                date(start_date), end_date, technique, tool 
+                                FROM Acquisition
+                                WHERE date(start_date) > '{date}'
+
+                                UNION
+                                SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                                date(start_date), end_date, Null As technique, tool
+                                FROM Exporting
+                                WHERE date(start_date) > '{date}'
+
+                                UNION
+                                SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                                date(start_date), end_date, Null As technique, tool
+                                FROM Modelling
+                                WHERE date(start_date) > '{date}'
+
+                                UNION
+                                SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                                date(start_date), end_date, Null As technique, tool
+                                FROM Optimising
+                                WHERE date(start_date) > '{date}'
+
+                                UNION
+                                SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                                date(start_date), end_date, Null As technique, tool
+                                FROM Processing
+                                WHERE date(start_date) > '{date}';
+                        """
             df_activityBySD = read_sql(query, con)
+#            df_activityBySD = to_datetime(df_activityBySD["start_date"])
+            # I should store the dates as sate type
+
+
+        df_activityBySD.drop(
+            df_activityBySD[
+                (df_activityBySD["responsible_institute"].isnull() | (df_activityBySD
+                                                        ["responsible_institute"] == ""))].index, inplace=True
+        )
+
+        df_activityBySD.reset_index(drop=True, inplace=True)
+
         return df_activityBySD
 
     def getActivitiesEndedBefore(self, date: str) -> DataFrame:
         with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
             query = f"""
-                    SELECT 'activity type' FROM Acquisition WHERE 'end date' < '%{date}%'
-                     UNION
-                    SELECT 'activity type' FROM Exporting WHERE 'end date' < '%{date}%'
-                     UNION
-                    SELECT 'activity type' FROM Modelling WHERE 'end date' < '%{date}%'
-                     UNION
-                    SELECT 'activity type' FROM Processing WHERE 'end date' < '%{date}%'
-                     UNION
-                    SELECT 'activity type' FROM Optimising WHERE 'end date' < '%{date}%'
-            """
-            df_activityBySD = read_sql(query, con)
-        return df_activityBySD
+                                SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                                start_date, end_date, technique, tool 
+                                FROM Acquisition
+                                WHERE 'end_date' < '%{date}%'
+
+                                UNION
+                                SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                                start_date, end_date, Null As technique, tool
+                                FROM Exporting
+                                WHERE 'end_date' < '%{date}%'
+
+                                UNION
+                                SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                                start_date, end_date, Null As technique, tool
+                                FROM Modelling
+                                WHERE 'end_date' < '%{date}%'
+
+                                UNION
+                                SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                                start_date, end_date, Null As technique, tool
+                                FROM Optimising
+                                WHERE 'end_date' < '%{date}%'
+
+                                UNION
+                                SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                                start_date, end_date, Null As technique, tool
+                                FROM Processing
+                                WHERE 'end_date' < '%{date}%';
+                        """
+            df_activityByED = read_sql(query, con)
+
+            df_activityByED.drop(
+                df_activityByED[
+                    (df_activityByED["responsible_institute"].isnull() | (df_activityByED
+                                                                          ["responsible_institute"] == ""))].index,
+                inplace=True
+            )
+
+            df_activityByED.reset_index(drop=True, inplace=True)
+
+        return df_activityByED
 
     def getAcquisitionsByTechnique(self, partialName: str) -> DataFrame:
         with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
             query = f"""
-                    SELECT 'Object Id', 'responsible institute' FROM Acquisition WHERE technique LIKE '%{partialName}%'
+                     SELECT activity_id, type, object_id, responsible_person, responsible_institute,
+                                start_date, end_date, technique, tool 
+                                FROM Acquisition WHERE technique LIKE '%{partialName}%'
             """
             df_acquisitionByTech = read_sql(query, con)
+
+            df_acquisitionByTech.drop(
+                df_acquisitionByTech[
+                    (df_acquisitionByTech["responsible_institute"].isnull() | (df_acquisitionByTech
+                                                        ["responsible_institute"] == ""))].index,inplace=True
+            )
+
+            df_acquisitionByTech.reset_index(drop=True, inplace=True)
+
         return df_acquisitionByTech
 
 
@@ -869,8 +1029,6 @@ class BasicMashup:
         for process_handler in self.processQuery:
             df_allActivities = process_handler.getAllActivities()
 
-            df_allActivities = df_allActivities.drop_duplicates()
-
             for _, row in df_allActivities.iterrows():
                 activity_class = self.activity_to_class.get(row["type"])
 
@@ -892,7 +1050,7 @@ class BasicMashup:
                                                         end = row["end_date"],
                                                         refersTo = self.getEntityById(row["object_id"])
                                                         ))
-                    # and add other parameters ro build the corresponding object
+
         return allActivities
 
     def getActivitiesByResponsibleInstitution(self, partialName: str) -> list[Activity]:
@@ -902,10 +1060,25 @@ class BasicMashup:
             df_activityByInst = process_handler.getActivitiesByResponsibleInstitution(partialName)
 
             for _, row in df_activityByInst.iterrows():
-                activity_class = self.activity_to_class.get(row["activity type"])
+                activity_class = self.activity_to_class.get(row["type"])
 
-                if activity_class:
-                    activityByInst.append(activity_class())  # Probably Here also we need some more information.
+                if activity_class and activity_class == Acquisition:
+                    activityByInst.append(activity_class(technique = row["technique"],
+                                                         institute = row["responsible_institute"],
+                                                         person = ["responsible_person"],
+                                                         tool = row["tool"].split("; "),
+                                                         start = row["start_date"],
+                                                         end=row["end_date"],
+                                                         refersTo=self.getEntityById(row["object_id"])
+                                                         ))
+                elif activity_class:
+                    activityByInst.append(activity_class(institute = row["responsible_institute"],
+                                                        person = row["responsible_person"],
+                                                        tool = row["tool"].split("; "),
+                                                        start = row["start_date"],
+                                                        end = row["end_date"],
+                                                        refersTo = self.getEntityById(row["object_id"])
+                                                        ))
 
         return activityByInst
 
@@ -916,25 +1089,133 @@ class BasicMashup:
             df_activityByPers = process_handler.getActivitiesByResponsiblePerson(partialName)
 
             for _, row in df_activityByPers.iterrows():
-                activity_class = self.activity_to_class.get(row["activity type"])
+                activity_class = self.activity_to_class.get(row["type"])
 
-                if activity_class:
-                    activityByPers.append(activity_class())  # Probably Here also we need some more information.
+                if activity_class and activity_class == Acquisition:
+                    activityByPers.append(activity_class(technique = row["technique"],
+                                                         institute = row["responsible_institute"],
+                                                         person = row["responsible_person"],
+                                                         tool = row["tool"].split("; "),
+                                                         start = row["start_date"],
+                                                         end=row["end_date"],
+                                                         refersTo=self.getEntityById(row["object_id"])
+                                                         ))
+                elif activity_class:
+                    activityByPers.append(activity_class(institute = row["responsible_institute"],
+                                                        person = row["responsible_person"],
+                                                        tool = row["tool"].split("; "),
+                                                        start = row["start_date"],
+                                                        end = row["end_date"],
+                                                        refersTo = self.getEntityById(row["object_id"])
+                                                        ))
 
         return activityByPers
 
     def getActivitiesUsingTool(self, partialName: str) -> list[Activity]:
-        pass
+        activityUsingTool = []
+
+        for process_handler in self.processQuery:
+            df_activityUsingTool = process_handler.getActivitiesUsingTool(partialName)
+
+            for _, row in df_activityUsingTool.iterrows():
+                activity_class = self.activity_to_class.get(row["type"])
+
+                if activity_class and activity_class == Acquisition:
+                    activityUsingTool.append(activity_class(technique = row["technique"],
+                                                         institute = row["responsible_institute"],
+                                                         person = row["responsible_person"],
+                                                         tool = row["tool"].split("; "),
+                                                         start = row["start_date"],
+                                                         end=row["end_date"],
+                                                         refersTo=self.getEntityById(row["object_id"])
+                                                         ))
+                elif activity_class:
+                    activityUsingTool.append(activity_class(institute = row["responsible_institute"],
+                                                        person = row["responsible_person"],
+                                                        tool = row["tool"].split("; "),
+                                                        start = row["start_date"],
+                                                        end = row["end_date"],
+                                                        refersTo = self.getEntityById(row["object_id"])
+                                                        ))
+
+        return activityUsingTool
 
     def getActivitiesStartedAfter(self, date: str) -> list[Activity]:
-        pass
+        activityStartedAfter = []
+
+        for processHandler in self.processQuery:
+            df_activityStartedAfter = processHandler.getActivitiesStartedAfter(date)
+
+            for _, row in df_activityStartedAfter.iterrows():
+                activity_class = self.activity_to_class.get(row["type"])
+
+                if activity_class and activity_class == Acquisition:
+                    activityStartedAfter.append(activity_class(technique = row["technique"],
+                                                         institute = row["responsible_institute"],
+                                                         person = row["responsible_person"],
+                                                         tool = row["tool"].split("; "),
+                                                         start = row["start_date"],
+                                                         end=row["end_date"],
+                                                         refersTo=self.getEntityById(row["object_id"])
+                                                         ))
+                elif activity_class:
+                    activityStartedAfter.append(activity_class(institute = row["responsible_institute"],
+                                                        person = row["responsible_person"],
+                                                        tool = row["tool"].split("; "),
+                                                        start = row["start_date"],
+                                                        end = row["end_date"],
+                                                        refersTo = self.getEntityById(row["object_id"])
+                                                        ))
+        return activityStartedAfter
 
     def getActivitiesEndedBefore(self, date: str) -> list[Activity]:
-        pass
+        activityEndedBefore = []
+
+        for processHandler in self.processQuery:
+            df_activityEndedBefore = processHandler.getActivitiesEndedBefore(date)
+
+            for _, row in df_activityEndedBefore.iterrows():
+                activity_class = self.activity_to_class.get(row["type"])
+
+                if activity_class and activity_class == Acquisition:
+                    activityEndedBefore.append(activity_class(technique=row["technique"],
+                                                               institute=row["responsible_institute"],
+                                                               person=row["responsible_person"],
+                                                               tool=row["tool"].split("; "),
+                                                               start=row["start_date"],
+                                                               end=row["end_date"],
+                                                               refersTo=self.getEntityById(row["object_id"])
+                                                               ))
+                elif activity_class:
+                    activityEndedBefore.append(activity_class(institute=row["responsible_institute"],
+                                                               person=row["responsible_person"],
+                                                               tool=row["tool"].split("; "),
+                                                               start=row["start_date"],
+                                                               end=row["end_date"],
+                                                               refersTo=self.getEntityById(row["object_id"])
+                                                               ))
+        return activityEndedBefore
 
     def getAcquisitionsByTechnique(self, partialName: str) -> list[Acquisition]:
-        pass
+        acquisitionByTech = []
 
+        for processHandler in self.processQuery:
+            df_acquisitionByTech = processHandler.getAcquisitionByTechnique(partialName)
+
+            for _, row in df_acquisitionByTech.iterrows():
+                activity_class = self.activity_to_class.get(row["type"])
+
+                if activity_class and activity_class == Acquisition:
+                    acquisitionByTech.append(activity_class(technique=row["technique"],
+                                                               institute=row["responsible_institute"],
+                                                               person=row["responsible_person"],
+                                                               tool=row["tool"].split("; "),
+                                                               start=row["start_date"],
+                                                               end=row["end_date"],
+                                                               refersTo=self.getEntityById(row["object_id"])
+                                                               ))
+
+        return acquisitionByTech
 
 class AdvancedMashup(BasicMashup):
 

@@ -4,9 +4,9 @@ from impl import MetadataUploadHandler, ProcessDataUploadHandler, ProcessDataQue
 # Once all the classes are imported, first create the relational
 # database using the related source data
 rel_path = "relational.db"
-process = ProcessDataUploadHandler()
-process.setDbPathOrUrl(rel_path)
-process.pushDataToDb("data/process.json")
+#process = ProcessDataUploadHandler()
+#process.setDbPathOrUrl(rel_path)
+#process.pushDataToDb("data/process.json")
 # Please remember that one could, in principle, push one or more files
 # calling the method one or more times (even calling the method twice
 # specifying the same file!)
@@ -39,13 +39,21 @@ mashup.addMetadataHandler(metadata_qh)
 #result_3 = mashup.getAuthorsOfCulturalHeritageObject(objectId = "30")
 #result_4 = mashup.getCulturalHeritageObjectsAuthoredBy(personId="VIAF:100190422")
 #result_5 = mashup.getAllActivities()
-result_6 = mashup.getAllActivities()
+#result_6 = mashup.getAllActivities()
+#result_7 = mashup.getActivitiesByResponsibleInstitution("hilology")
+#result_8 = mashup.getActivitiesByResponsiblePerson("Liddell")
+#result_9 = mashup.getActivitiesUsingTool("Nikon")
+result_10 = mashup.getActivitiesEndedBefore("2024-10-10")
 
 #print(result_2.getTitle())
 #print(result_2)
 #print(result_3)
 #print(len(result_4))
-print(result_6[1])
-print(result_6[1].refersTo.getTitle())
+#print(result_6[1])
+#print(result_6[1].refersTo.getTitle())
+#print(len(result_7))
+#res = result_8[0]
+#print(res.refersTo.getId())
+print(result_10)
 
 
