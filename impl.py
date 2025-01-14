@@ -773,33 +773,33 @@ class ProcessDataQueryHandler(QueryHandler):
         with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
             query = f"""
                                 SELECT activity_id, type, object_id, responsible_person, responsible_institute,
-                                date(start_date), end_date, technique, tool 
+                                start_date, end_date, technique, tool 
                                 FROM Acquisition
-                                WHERE date(start_date) > '{date}'
+                                WHERE start_date > date('{date}')
 
                                 UNION
                                 SELECT activity_id, type, object_id, responsible_person, responsible_institute,
-                                date(start_date), end_date, Null As technique, tool
+                                start_date, end_date, Null As technique, tool
                                 FROM Exporting
-                                WHERE date(start_date) > '{date}'
+                                WHERE start_date > date('{date}')
 
                                 UNION
                                 SELECT activity_id, type, object_id, responsible_person, responsible_institute,
-                                date(start_date), end_date, Null As technique, tool
+                                start_date, end_date, Null As technique, tool
                                 FROM Modelling
-                                WHERE date(start_date) > '{date}'
+                                WHERE start_date > date('{date}')
 
                                 UNION
                                 SELECT activity_id, type, object_id, responsible_person, responsible_institute,
-                                date(start_date), end_date, Null As technique, tool
+                                start_date, end_date, Null As technique, tool
                                 FROM Optimising
-                                WHERE date(start_date) > '{date}'
+                                WHERE start_date > date('{date}')
 
                                 UNION
                                 SELECT activity_id, type, object_id, responsible_person, responsible_institute,
-                                date(start_date), end_date, Null As technique, tool
+                                start_date, end_date, Null As technique, tool
                                 FROM Processing
-                                WHERE date(start_date) > '{date}';
+                                WHERE start_date > date('{date}');
                         """
             df_activityBySD = read_sql(query, con)
 #            df_activityBySD = to_datetime(df_activityBySD["start_date"])
@@ -822,31 +822,31 @@ class ProcessDataQueryHandler(QueryHandler):
                                 SELECT activity_id, type, object_id, responsible_person, responsible_institute,
                                 start_date, end_date, technique, tool 
                                 FROM Acquisition
-                                WHERE 'end_date' < '%{date}%'
+                                WHERE end_date < date('{date}')
 
                                 UNION
                                 SELECT activity_id, type, object_id, responsible_person, responsible_institute,
                                 start_date, end_date, Null As technique, tool
                                 FROM Exporting
-                                WHERE 'end_date' < '%{date}%'
+                                WHERE end_date < date('{date}')
 
                                 UNION
                                 SELECT activity_id, type, object_id, responsible_person, responsible_institute,
                                 start_date, end_date, Null As technique, tool
                                 FROM Modelling
-                                WHERE 'end_date' < '%{date}%'
+                                WHERE end_date < date('{date}')
 
                                 UNION
                                 SELECT activity_id, type, object_id, responsible_person, responsible_institute,
                                 start_date, end_date, Null As technique, tool
                                 FROM Optimising
-                                WHERE 'end_date' < '%{date}%'
+                                WHERE end_date < date('{date}')
 
                                 UNION
                                 SELECT activity_id, type, object_id, responsible_person, responsible_institute,
                                 start_date, end_date, Null As technique, tool
                                 FROM Processing
-                                WHERE 'end_date' < '%{date}%';
+                                WHERE end_date < date('{date}');
                         """
             df_activityByED = read_sql(query, con)
 
@@ -1200,7 +1200,7 @@ class BasicMashup:
         acquisitionByTech = []
 
         for processHandler in self.processQuery:
-            df_acquisitionByTech = processHandler.getAcquisitionByTechnique(partialName)
+            df_acquisitionByTech = processHandler.getAcquisitionsByTechnique(partialName)
 
             for _, row in df_acquisitionByTech.iterrows():
                 activity_class = self.activity_to_class.get(row["type"])

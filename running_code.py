@@ -1,3 +1,5 @@
+from anaconda_project.internal.conda_api import result
+
 from impl import MetadataUploadHandler, ProcessDataUploadHandler, ProcessDataQueryHandler, MetadataQueryHandler, \
     AdvancedMashup, BasicMashup
 
@@ -43,7 +45,9 @@ mashup.addMetadataHandler(metadata_qh)
 #result_7 = mashup.getActivitiesByResponsibleInstitution("hilology")
 #result_8 = mashup.getActivitiesByResponsiblePerson("Liddell")
 #result_9 = mashup.getActivitiesUsingTool("Nikon")
-result_10 = mashup.getActivitiesEndedBefore("2024-10-10")
+#result_10 = mashup.getActivitiesStartedAfter("2023-10-01")
+#result_11 = mashup.getActivitiesEndedBefore("2023-01-01")
+result_12 = mashup.getAcquisitionsByTechnique("3D")
 
 #print(result_2.getTitle())
 #print(result_2)
@@ -54,6 +58,8 @@ result_10 = mashup.getActivitiesEndedBefore("2024-10-10")
 #print(len(result_7))
 #res = result_8[0]
 #print(res.refersTo.getId())
-print(result_10)
+#print(result_10[0].getStartDate())
+#print(result_11)
+print(result_12)
 
 

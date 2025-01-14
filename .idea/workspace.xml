@@ -7,7 +7,6 @@
     <list default="true" id="fcb39a14-e122-4ee1-bd31-390232edeaa6" name="Changes" comment="Listing all the needed classes. The Handler class uses a set">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/impl.py" beforeDir="false" afterPath="$PROJECT_DIR$/impl.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/relational.db" beforeDir="false" afterPath="$PROJECT_DIR$/relational.db" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/running_code.py" beforeDir="false" afterPath="$PROJECT_DIR$/running_code.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
