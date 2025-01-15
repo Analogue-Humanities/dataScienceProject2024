@@ -38,7 +38,7 @@ mashup.addMetadataHandler(metadata_qh)
 
 #result_1 = mashup.getAllPeople()
 #result_2 = mashup.getEntityById(id = "30")
-#result_3 = mashup.getAuthorsOfCulturalHeritageObject(objectId = "30")
+#result_3 = mashup.getAuthorsOfCulturalHeritageObject(objectId = "15")
 #result_4 = mashup.getCulturalHeritageObjectsAuthoredBy(personId="VIAF:100190422")
 #result_5 = mashup.getAllActivities()
 #result_6 = mashup.getAllActivities()
@@ -50,7 +50,9 @@ mashup.addMetadataHandler(metadata_qh)
 #result_12 = mashup.getAcquisitionsByTechnique("3D")
 #result_13 = mashup.getObjectsHandledByResponsiblePerson("Byron")
 #result_14 = mashup.getObjectsHandledByResponsibleInstitution("Philology")
-result_15 = mashup.getAuthorsOfObjectsAcquiredInTimeFrame("2022-10-01", "2024-01-01")
+#result_15 = mashup.getAuthorsOfObjectsAcquiredInTimeFrame("2023-04-15", "2023-04-20")
+result_16 = mashup.getActivitiesOnObjectsAuthoredBy("ULAN:500114874")
+
 #print(result_2.getTitle())
 #print(result_2)
 #print(result_3)
@@ -65,6 +67,7 @@ result_15 = mashup.getAuthorsOfObjectsAcquiredInTimeFrame("2022-10-01", "2024-01
 #print(result_12)
 #print(result_13)
 #print([i.getId() for i in result_14])
-print(result_15)
-
+#for i in result_15:
+#    print(i.getId())
+print(result_16[0].refersTo.getAuthors())
 

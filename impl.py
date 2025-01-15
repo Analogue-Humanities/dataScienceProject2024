@@ -1,13 +1,13 @@
-# Defining all the necessary classes of the project
+from datetime import date
 from json import load
-from pandas import DataFrame, read_csv, read_sql
+from pandas import DataFrame, read_csv, read_sql, to_datetime
 from sqlite3 import connect
 from rdflib import Graph, URIRef, Literal, RDF
 from rdflib.plugins.stores.sparqlstore import SPARQLUpdateStore
 import re
 from sparql_dataframe import get
 
-# First of all defining Classes of the UML Data Model
+# Define the classes of the UML Data Model
 class IdentifiableEntity(object):
     def __init__(self, id: str):
         self.id = id
@@ -23,8 +23,7 @@ class CulturalHeritageObject(IdentifiableEntity):
         self.date = date
         self.owner = owner
         self.place = place
-        self.authors = [] # write a list which authors to be appended to it
-        self.authors.append(authors)
+        self.authors = authors.split(";")
 
     def getTitle(self):
         return self.title
@@ -41,7 +40,7 @@ class CulturalHeritageObject(IdentifiableEntity):
     def getAuthors(self):
         return self.authors
 
-# Defining 10 types of Cultural Heritage Objects classes
+# Define 10 types of Cultural Heritage Objects classes
 class Map(CulturalHeritageObject):
     pass
 class Model(CulturalHeritageObject):
@@ -71,10 +70,11 @@ class ManuscriptPlate(CulturalHeritageObject):
 class NauticalChart(CulturalHeritageObject):
     pass
 
-
+# Define Person class
 class Person(IdentifiableEntity):
     def __init__(self, name, id=None):
         super().__init__(id)
+        super().getId()
         self.name = name
     def getName(self):
         return self.name
@@ -151,18 +151,12 @@ class Handler:
         return True
 
 class UploadHandler(Handler):
-#    def __init__(self, dbPathOrUrl, pathOrUrl):
-#        super().__init__()
-#        super().setDbPathOrUrl(pathOrUrl)
 
     def pushDataToDb(self, path: str) -> bool:
         # This is an abstract method
         raise NotImplementedError("Subclasses must implement pushDataToDb")
 
 class MetadataUploadHandler(UploadHandler):
-#    def __init__(self, dbPathOrUrl, pathOrUrl):
-#        super().__init__()
-#        super().setDbPathOrUrl(pathOrUrl)
 
     def uploadToGrDb(self, graph):
 
@@ -234,11 +228,10 @@ class MetadataUploadHandler(UploadHandler):
         owner = URIRef("https://schema.org/owns")
         place = URIRef("https://schema.org/location")
 
-
-        subjects = {}
         types = set()
         authorMapping = {}
-        # Linnaeus VIAF which is added to the database
+
+        # Linnaeus VIAF which was not in the source file is added to the database
         Linnaeus_id = "VIAF:34594730"
         parenthesis_Pattern = re.compile(r"\(.*?\)")
 
@@ -250,7 +243,6 @@ class MetadataUploadHandler(UploadHandler):
             for idx, row in metaData.iterrows():
 
                 # Some data cleansing work
-
                 if row["Author"] == "":
                     in_row_author = re.search(r'\((.*?),', row["Title"])
                     if in_row_author and in_row_author.group(1) == "Linnaeus":
@@ -376,11 +368,7 @@ class MetadataUploadHandler(UploadHandler):
             newClassName = newClassName+n[1].capitalize()
         return newClassName
 
-
 class ProcessDataUploadHandler(UploadHandler):
-#    def __init__(self, dbPathOrUrl, pathOrUrl):
-#        super().__init__()
-#        super().setDbPathOrUrl(pathOrUrl)
 
     def uploadToRelDb(self, data: DataFrame, name: str):
         with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
@@ -445,7 +433,6 @@ class ProcessDataUploadHandler(UploadHandler):
         except Exception as e:
             print(f"An unexpected error occurred: {e}")
             return False
-
 
 class QueryHandler(Handler):
 #    def __init__(self):
@@ -546,7 +533,7 @@ class MetadataQueryHandler(QueryHandler):
                 WHERE {{
                        ?s schema:identifier "{objectId}".
                        ?s schema:author ?authorId.
-                       ?authorId schema:name ?id.
+                       ?authorId schema:identifier ?id.
                        ?authorId schema:name ?author.
                 }}
         '''
@@ -586,7 +573,6 @@ class MetadataQueryHandler(QueryHandler):
         else:
             print("There is no objects associated with this author")
             return df_objectByAuthor
-
 
 class ProcessDataQueryHandler(QueryHandler):
 
@@ -768,7 +754,6 @@ class ProcessDataQueryHandler(QueryHandler):
 
         return df_activityByTool
 
-
     def getActivitiesStartedAfter(self, date: str) -> DataFrame:
         with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
             query = f"""
@@ -879,7 +864,6 @@ class ProcessDataQueryHandler(QueryHandler):
             df_acquisitionByTech.reset_index(drop=True, inplace=True)
 
         return df_acquisitionByTech
-
 
 class BasicMashup:
     def __init__(self):
@@ -1220,7 +1204,19 @@ class BasicMashup:
 class AdvancedMashup(BasicMashup):
 
     def getActivitiesOnObjectsAuthoredBy(self, personId: str) -> list[Activity]:
-        pass
+
+        ActivitiesByAuthor = []
+        CHObjects = self.getCulturalHeritageObjectsAuthoredBy(personId)
+        CHObjectsIds = [Object.getId() for Object in CHObjects] # Build a list of Ids of CHObjects done by Author
+
+        AllActivities = self.getAllActivities()
+
+        for activity in AllActivities: # Iterate through all the activities
+            ObjectIdReferred = activity.refersTo.getId() # Get the Object referred and Get its Id
+            if ObjectIdReferred in CHObjectsIds: # Check if te id of referred Object is in the object Ids by the Author
+                ActivitiesByAuthor.append(activity)
+
+        return ActivitiesByAuthor
 
     def getObjectsHandledByResponsiblePerson(self, partialName: str) -> list[CulturalHeritageObject]:
 
@@ -1231,11 +1227,11 @@ class AdvancedMashup(BasicMashup):
         if activitiesByResPers:
             for activity in activitiesByResPers:
 
-                ObjectByActivity = activity.refersTo # Getting the Cultural Heritage Objects from activities
+                ObjectByActivity = activity.refersTo # Get the Cultural Heritage Objects from activities
 
-                Object_Id = ObjectByActivity.getId() #
+                Object_Id = ObjectByActivity.getId() #Get the Object id
                 if Object_Id not in ObjectIds:
-                    ObjectIds.add(Object_Id)
+                    ObjectIds.add(Object_Id) # Add it to the set to filter out duplicates
 
         ObjectsByResPers = [self.getEntityById(i) for i in ObjectIds] # The list of Objects given the ids
 
@@ -1243,14 +1239,14 @@ class AdvancedMashup(BasicMashup):
 
     def getObjectsHandledByResponsibleInstitution(self, partialName: str) -> list[CulturalHeritageObject]:
 
-        # Keeping the ids got from refers to in a set to remove duplicates
+        # The procedure is the same as previous class
         ObjectIds = set()
         activitiesByResInst = self.getActivitiesByResponsibleInstitution(partialName)
 
         if activitiesByResInst:
             for activity in activitiesByResInst:
 
-                ObjectByActivity = activity.refersTo # Getting the Cultural Heritage Objects from activities
+                ObjectByActivity = activity.refersTo
 
                 Object_Id = ObjectByActivity.getId()
                 if Object_Id not in ObjectIds:
@@ -1262,25 +1258,27 @@ class AdvancedMashup(BasicMashup):
 
     def getAuthorsOfObjectsAcquiredInTimeFrame(self, start: str, end: str) -> list[Person]:
 
-        ObjectIds = set()
         AuthorIds = set()
-        acquisitionInTimeFrame = list()
 
-        acquisitionsAfter = self.getActivitiesStartedAfter(date = start)
-        acqusitionsBefore = self.getActivitiesEndedBefore(date = end)
+        start_date = to_datetime(start) # Changing the type of input dates to datetime
+        end_date = to_datetime(end)
+
+        allActivities = self.getAllActivities()  # Getting all the activities
+
+        for activity in allActivities:
+                                               # Filter the Acquisition activity
+            if hasattr(activity, "technique"): # Because only the acquisition activity has the attribute technique
+                    # Check if the start and end date of the acquisition is between the given dates
+                if to_datetime(activity.getStartDate()) > start_date and to_datetime(activity.getEndDate()) < end_date:
+                    CHObject = activity.refersTo
+                    ObjectId = CHObject.getId()
+
+                    author = self.getAuthorsOfCulturalHeritageObject(ObjectId)
+                    if author and len(author)>0:
+                        for i in author:
+                            AuthorIds.add(i.getId())
 
 
+        Authors = [self.getEntityById(i) for i in AuthorIds]
 
-        print(f"timeframe: {acquisitionInTimeFrame}")
-        for acquisition in acquisitionInTimeFrame:
-
-            ObjectAcquired = acquisition.refersTo
-
-            Authors = ObjectAcquired.getAuthors()
-            for author in Authors:
-                AuthorIds.add(author)
-
-        return list(AuthorIds)
-
-
-
+        return Authors
