@@ -1,6 +1,6 @@
 # Defining all the necessary classes of the project
 from json import load
-from pandas import DataFrame, read_csv, read_sql, to_datetime
+from pandas import DataFrame, read_csv, read_sql
 from sqlite3 import connect
 from rdflib import Graph, URIRef, Literal, RDF
 from rdflib.plugins.stores.sparqlstore import SPARQLUpdateStore
@@ -9,10 +9,10 @@ from sparql_dataframe import get
 
 # First of all defining Classes of the UML Data Model
 class IdentifiableEntity(object):
-    def __init__(self, id):
+    def __init__(self, id: str):
         self.id = id
 
-    def getId(self):
+    def getId(self) -> str:
         return self.id
 
 # The cultural Heritage Object class definition
@@ -474,7 +474,8 @@ class QueryHandler(Handler):
 
         }}
         """
-        df_id = get(endpoint, query, True)
+        df_id = get(endpoint, query, True).astype(str)
+
         if df_id.empty == False:  # Check if the result dataframe is not empty
             return df_id
         else:  # In case the dataframe is empty
@@ -496,7 +497,7 @@ class MetadataQueryHandler(QueryHandler):
                  	?authorId schema:identifier ?id.
                }
                """
-        df_persons = get(endpoint, query, True)
+        df_persons = get(endpoint, query, True).astype({"id": str})
         return df_persons
 
     def getAllCulturalHeritageObjects(self) -> DataFrame:
@@ -533,7 +534,7 @@ class MetadataQueryHandler(QueryHandler):
                     }
 
                        """
-        df_allCHObjects = get(endpoint, query, True).sort_values(by=["id"])
+        df_allCHObjects = get(endpoint, query, True).astype({"id": str, "date": str}).sort_values(by=["id"])
         return df_allCHObjects
 
     def getAuthorsOfCulturalHeritageObject(self, objectId: str) -> DataFrame:
@@ -549,7 +550,7 @@ class MetadataQueryHandler(QueryHandler):
                        ?authorId schema:name ?author.
                 }}
         '''
-        df_authorOFCHObject = get(endpoint, query, True)
+        df_authorOFCHObject = get(endpoint, query, True).astype({"id": str})
         if df_authorOFCHObject.empty == False:  # Check if the result dataframe is not empty
             return df_authorOFCHObject
         else:  # In case the dataframe is empty
@@ -579,7 +580,7 @@ class MetadataQueryHandler(QueryHandler):
                   }}
                '''
 
-        df_objectByAuthor = get(endpoint, query, True)
+        df_objectByAuthor = get(endpoint, query, True).astype({"objectId": str, "date": str})
         if df_objectByAuthor.empty == False:
             return df_objectByAuthor
         else:
@@ -613,12 +614,12 @@ class ProcessDataQueryHandler(QueryHandler):
                     UNION
                     SELECT activity_id, type, object_id, responsible_person, responsible_institute,
                     start_date, end_date, Null As technique, tool
-                    FROM
+                    FROM Optimising
                     
                     UNION
                     SELECT activity_id, type, object_id, responsible_person, responsible_institute,
                     start_date, end_date, Null As technique, tool
-                    FROM Processing
+                    FROM Processing;
                     
             """
             df_activities = read_sql(query, con)
@@ -631,7 +632,6 @@ class ProcessDataQueryHandler(QueryHandler):
             )
 
             df_activities.reset_index(drop=True, inplace=True)
-
         return df_activities
 
     def getActivitiesByResponsibleInstitution(self, partialName: str) -> DataFrame:
@@ -1223,10 +1223,64 @@ class AdvancedMashup(BasicMashup):
         pass
 
     def getObjectsHandledByResponsiblePerson(self, partialName: str) -> list[CulturalHeritageObject]:
-        pass
+
+        # Keeping the ids got from refers to in a set to remove duplicates
+        ObjectIds = set()
+        activitiesByResPers = self.getActivitiesByResponsiblePerson(partialName)
+
+        if activitiesByResPers:
+            for activity in activitiesByResPers:
+
+                ObjectByActivity = activity.refersTo # Getting the Cultural Heritage Objects from activities
+
+                Object_Id = ObjectByActivity.getId() #
+                if Object_Id not in ObjectIds:
+                    ObjectIds.add(Object_Id)
+
+        ObjectsByResPers = [self.getEntityById(i) for i in ObjectIds] # The list of Objects given the ids
+
+        return ObjectsByResPers
 
     def getObjectsHandledByResponsibleInstitution(self, partialName: str) -> list[CulturalHeritageObject]:
-        pass
+
+        # Keeping the ids got from refers to in a set to remove duplicates
+        ObjectIds = set()
+        activitiesByResInst = self.getActivitiesByResponsibleInstitution(partialName)
+
+        if activitiesByResInst:
+            for activity in activitiesByResInst:
+
+                ObjectByActivity = activity.refersTo # Getting the Cultural Heritage Objects from activities
+
+                Object_Id = ObjectByActivity.getId()
+                if Object_Id not in ObjectIds:
+                    ObjectIds.add(Object_Id)
+
+        ObjectsByResInst = [self.getEntityById(i) for i in ObjectIds] # The list of Objects given the ids
+
+        return ObjectsByResInst
 
     def getAuthorsOfObjectsAcquiredInTimeFrame(self, start: str, end: str) -> list[Person]:
-        pass
+
+        ObjectIds = set()
+        AuthorIds = set()
+        acquisitionInTimeFrame = list()
+
+        acquisitionsAfter = self.getActivitiesStartedAfter(date = start)
+        acqusitionsBefore = self.getActivitiesEndedBefore(date = end)
+
+
+
+        print(f"timeframe: {acquisitionInTimeFrame}")
+        for acquisition in acquisitionInTimeFrame:
+
+            ObjectAcquired = acquisition.refersTo
+
+            Authors = ObjectAcquired.getAuthors()
+            for author in Authors:
+                AuthorIds.add(author)
+
+        return list(AuthorIds)
+
+
+
