@@ -1,6 +1,5 @@
-from datetime import date
 from json import load
-from pandas import DataFrame, read_csv, read_sql, to_datetime
+from pandas import DataFrame, read_csv, read_sql
 from sqlite3 import connect
 from rdflib import Graph, URIRef, Literal, RDF
 from rdflib.plugins.stores.sparqlstore import SPARQLUpdateStore
@@ -17,13 +16,13 @@ class IdentifiableEntity(object):
 
 # The cultural Heritage Object class definition
 class CulturalHeritageObject(IdentifiableEntity):
-    def __init__(self, id, title, date, owner,  place, authors):
+    def __init__(self, id, title, date, owner,  place, authorId, authorName):
         super().__init__(id)
         self.title = title
         self.date = date
         self.owner = owner
         self.place = place
-        self.authors = authors.split(";")
+        self._authors = Person(name = authorName, id = authorId)
 
     def getTitle(self):
         return self.title
@@ -38,7 +37,7 @@ class CulturalHeritageObject(IdentifiableEntity):
         return self.place
 
     def getAuthors(self):
-        return self.authors
+        return self._authors
 
 # Define 10 types of Cultural Heritage Objects classes
 class Map(CulturalHeritageObject):
@@ -435,15 +434,13 @@ class ProcessDataUploadHandler(UploadHandler):
             return False
 
 class QueryHandler(Handler):
-#    def __init__(self):
-#        self.id = id
 
     def getById(self, id: str) -> DataFrame:
-        endpoint = MetadataUploadHandler.getDbPathOrUrl(self)
+        endpoint =  self.getDbPathOrUrl()
         query = f"""
         PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
         PREFIX schema: <https://schema.org/>
-        SELECT ?name ?id ?type ?author ?date ?owner ?place 
+        SELECT ?name ?id ?type ?authorName ?authorId ?date ?owner ?place 
         WHERE {{
             ?entityId schema:identifier "{id}".
             ?entityId schema:name ?name.
@@ -451,8 +448,9 @@ class QueryHandler(Handler):
          	OPTIONAL {{
          	          ?entityId rdf:type ?typeId.
           	          ?typeId schema:name ?type.
-                      ?entityId schema:author ?authorId.
-                      ?authorId schema:name ?author.
+                      ?entityId schema:author ?author.
+                      ?author schema:name ?authorName.
+                      ?author schema:identifier ?authorId.
                       ?entityId schema:dateCreated ?date.
                       ?entityId schema:location ?placeId.
                       ?placeId schema:name ?place.
@@ -461,13 +459,13 @@ class QueryHandler(Handler):
 
         }}
         """
-        df_id = get(endpoint, query, True).astype(str)
+        try:
+            df_id = get(endpoint, query, True).astype(str)
 
-        if df_id.empty == False:  # Check if the result dataframe is not empty
-            return df_id
-        else:  # In case the dataframe is empty
-            print("There is no corresponding results for the query")
-            return df_id
+        except:
+            df_id = DataFrame()
+
+        return df_id
 
 class MetadataQueryHandler(QueryHandler):
 
@@ -493,7 +491,7 @@ class MetadataQueryHandler(QueryHandler):
                     PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
                     PREFIX schema: <https://schema.org/>
                     PREFIX wikidata: <https://www.wikidata.org/wiki/>
-                    SELECT ?s ?id ?objectName ?type ?author ?date ?owner ?place
+                    SELECT ?s ?id ?objectName ?type ?authorName ?authorId ?date ?owner ?place
                     WHERE {
                       VALUES ?typeId {
                         wikidata:Q728502
@@ -511,8 +509,9 @@ class MetadataQueryHandler(QueryHandler):
                       ?typeId schema:name ?type.
                       ?s schema:identifier ?id.
                       ?s schema:name ?objectName.
-                      ?s schema:author ?authorId.
-                      ?authorId schema:name ?author.
+                      ?s schema:author ?author.
+                      ?author schema:name ?authorName.
+                      ?author schema:identifier ?authorId.
                       ?s schema:dateCreated ?date.
                       ?s schema:owns ?ownerId.
                       ?ownerId schema:name ?owner.
@@ -538,11 +537,8 @@ class MetadataQueryHandler(QueryHandler):
                 }}
         '''
         df_authorOFCHObject = get(endpoint, query, True).astype({"id": str})
-        if df_authorOFCHObject.empty == False:  # Check if the result dataframe is not empty
-            return df_authorOFCHObject
-        else:  # In case the dataframe is empty
-            print("There is no author for this object")
-            return df_authorOFCHObject
+
+        return df_authorOFCHObject
 
     # Get the Objects from the author input
     def getCulturalHeritageObjectsAuthoredBy(self, personId: str) -> DataFrame:
@@ -550,15 +546,16 @@ class MetadataQueryHandler(QueryHandler):
         query = f'''
                 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
                 PREFIX schema: <https://schema.org/>              
-                SELECT ?objectId ?title ?type ?author ?date ?owner ?place
+                SELECT ?objectId ?title ?type ?authorName ?authorId ?date ?owner ?place
                 WHERE {{
-                  ?object schema:author ?authorId.
-                  ?authorId schema:identifier "{personId}".
+                  ?object schema:author ?author.
+                  ?author schema:identifier "{personId}".
                   ?object schema:identifier ?objectId.
                   ?object schema:name ?title.
                   ?object rdf:type ?typeId.
                   ?typeId schema:name ?type.
-                  ?authorId schema:name ?author.
+                  ?author schema:name ?authorName.
+                  ?author schema:identifier ?authorId.
                   ?object schema:dateCreated ?date.
                   ?object schema:owns ?ownerId.
                   ?ownerId schema:name ?owner.
@@ -568,18 +565,10 @@ class MetadataQueryHandler(QueryHandler):
                '''
 
         df_objectByAuthor = get(endpoint, query, True).astype({"objectId": str, "date": str})
-        if df_objectByAuthor.empty == False:
-            return df_objectByAuthor
-        else:
-            print("There is no objects associated with this author")
-            return df_objectByAuthor
+        return df_objectByAuthor
 
 class ProcessDataQueryHandler(QueryHandler):
 
-    # I am not sure if this method is constructed correctly. it is asked to construct a method which returns all the
-    # activities. My method is so naive.
-    # Update: I think I have to SELECT other columns from the database too. Because it makes no sense. to have only
-    # a list of four activities.
     def getAllActivities(self) -> DataFrame:
         with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
             query = """
@@ -935,8 +924,10 @@ class BasicMashup:
                 # Dynamically construct the object based on the type
                 entity_class = self.type_to_class.get(row["type"])
                 if entity_class:
+
                     return entity_class(id = row["id"], title = row["name"], date = row["date"], owner = row["owner"],
-                                        place = row["place"], authors = row["author"])
+                                        place = row["place"], authorName = row["authorName"].split(";"),
+                                        authorId = row["authorId"].split(";"))
 
             # Query for person
             df_people = metadata_handler.getById(id)
@@ -975,7 +966,10 @@ class BasicMashup:
                 entity_class = self.type_to_class.get(row["type"])
 
                 if entity_class:
-                    allCHObjects.append(entity_class(id=row["id"], title=row["objectName"], authors=row["author"]))
+                    allCHObjects.append(entity_class(id=row["id"], title=row["objectName"],
+                                                     authorName = row["authorName"].split(";"),
+                                                     authorId = row["authorId"].split(";"),
+                                                     date=["date"], owner=["owner"], place=["place"]))
 
         return allCHObjects
 
@@ -1001,7 +995,9 @@ class BasicMashup:
                 entity_class = self.type_to_class.get(row["type"])
 
                 if entity_class:
-                    CHObjects.append(entity_class(id=row["objectId"], title=row["title"], authors=row["author"],
+                    CHObjects.append(entity_class(id=row["objectId"], title=row["title"],
+                                                  authorName = row["authorName"].split(";"),
+                                                  authorId = row["authorId"].split(";"),
                                                   date=row["date"], owner=row["owner"], place=row["place"]))
 
         return CHObjects
@@ -1207,8 +1203,9 @@ class AdvancedMashup(BasicMashup):
 
         ActivitiesByAuthor = []
         CHObjects = self.getCulturalHeritageObjectsAuthoredBy(personId)
+        print(CHObjects)
         CHObjectsIds = [Object.getId() for Object in CHObjects] # Build a list of Ids of CHObjects done by Author
-
+        print(CHObjectsIds)
         AllActivities = self.getAllActivities()
 
         for activity in AllActivities: # Iterate through all the activities
@@ -1260,16 +1257,13 @@ class AdvancedMashup(BasicMashup):
 
         AuthorIds = set()
 
-        start_date = to_datetime(start) # Changing the type of input dates to datetime
-        end_date = to_datetime(end)
-
         allActivities = self.getAllActivities()  # Getting all the activities
 
         for activity in allActivities:
                                                # Filter the Acquisition activity
             if hasattr(activity, "technique"): # Because only the acquisition activity has the attribute technique
                     # Check if the start and end date of the acquisition is between the given dates
-                if to_datetime(activity.getStartDate()) > start_date and to_datetime(activity.getEndDate()) < end_date:
+                if activity.getStartDate() > start and activity.getEndDate() < end:
                     CHObject = activity.refersTo
                     ObjectId = CHObject.getId()
 

@@ -1,8 +1,4 @@
-from anaconda_project.internal.conda_api import result
-
-from impl import MetadataUploadHandler, ProcessDataUploadHandler, ProcessDataQueryHandler, MetadataQueryHandler, \
-    AdvancedMashup, BasicMashup
-
+from impl import ProcessDataQueryHandler, MetadataQueryHandler, AdvancedMashup
 # Once all the classes are imported, first create the relational
 # database using the related source data
 rel_path = "relational.db"
@@ -36,38 +32,37 @@ mashup = AdvancedMashup()
 mashup.addProcessHandler(process_qh)
 mashup.addMetadataHandler(metadata_qh)
 
-#result_1 = mashup.getAllPeople()
-#result_2 = mashup.getEntityById(id = "30")
-#result_3 = mashup.getAuthorsOfCulturalHeritageObject(objectId = "15")
-#result_4 = mashup.getCulturalHeritageObjectsAuthoredBy(personId="VIAF:100190422")
-#result_5 = mashup.getAllActivities()
-#result_6 = mashup.getAllActivities()
-#result_7 = mashup.getActivitiesByResponsibleInstitution("hilology")
-#result_8 = mashup.getActivitiesByResponsiblePerson("Liddell")
-#result_9 = mashup.getActivitiesUsingTool("Nikon")
-#result_10 = mashup.getActivitiesStartedAfter("2023-10-01")
-#result_11 = mashup.getActivitiesEndedBefore("2023-01-01")
-#result_12 = mashup.getAcquisitionsByTechnique("3D")
-#result_13 = mashup.getObjectsHandledByResponsiblePerson("Byron")
-#result_14 = mashup.getObjectsHandledByResponsibleInstitution("Philology")
-#result_15 = mashup.getAuthorsOfObjectsAcquiredInTimeFrame("2023-04-15", "2023-04-20")
-result_16 = mashup.getActivitiesOnObjectsAuthoredBy("ULAN:500114874")
+result_1 = mashup.getAllPeople()
+result_2 = mashup.getEntityById(id = "26")
+result_3 = mashup.getAuthorsOfCulturalHeritageObject(objectId = "24")
+result_4 = mashup.getCulturalHeritageObjectsAuthoredBy(personId="VIAF:100190422")
+result_5 = mashup.getAllActivities()
+result_6 = mashup.getAllActivities()
+result_7 = mashup.getActivitiesByResponsibleInstitution("hilology")
+result_8 = mashup.getActivitiesByResponsiblePerson("Liddell")
+result_9 = mashup.getActivitiesUsingTool("Nikon")
+result_10 = mashup.getActivitiesStartedAfter("2023-10-01")
+result_11 = mashup.getActivitiesEndedBefore("2023-01-01")
+result_12 = mashup.getAcquisitionsByTechnique("3D")
+result_13 = mashup.getObjectsHandledByResponsiblePerson("Byron")
+result_14 = mashup.getObjectsHandledByResponsibleInstitution("Philology")
+result_15 = mashup.getAuthorsOfObjectsAcquiredInTimeFrame("2023-04-15", "2023-04-20")
+result_16 = mashup.getActivitiesOnObjectsAuthoredBy("VIAF:100190422")
 
-#print(result_2.getTitle())
-#print(result_2)
-#print(result_3)
-#print(len(result_4))
-#print(result_6[1])
-#print(result_6[1].refersTo.getTitle())
-#print(len(result_7))
-#res = result_8[0]
-#print(res.refersTo.getId())
-#print(result_10[0].getStartDate())
-#print(result_11)
-#print(result_12)
-#print(result_13)
-#print([i.getId() for i in result_14])
-#for i in result_15:
-#    print(i.getId())
-print(result_16[0].refersTo.getAuthors())
-
+print(result_2.getAuthors())
+print(result_2)
+print(result_3)
+print(len(result_4))
+print(f"result_5{result_5}")
+print(result_5[1].refersTo.getTitle())
+print(len(result_7))
+res = result_8[0]
+print(res.refersTo.getId())
+print(result_10[0].getStartDate())
+print(result_11)
+print(result_12)
+print(result_13)
+print([i.getId() for i in result_14])
+for i in result_15:
+    print(i.getId())
+print(result_16[0].refersTo.getAuthors().getName())
