@@ -16,13 +16,14 @@ class IdentifiableEntity(object):
 
 # The cultural Heritage Object class definition
 class CulturalHeritageObject(IdentifiableEntity):
-    def __init__(self, id, title, date, owner,  place, authorId, authorName):
+    def __init__(self, id, title, date, owner,  place, author):
         super().__init__(id)
         self.title = title
         self.date = date
         self.owner = owner
         self.place = place
-        self._authors = Person(name = authorName, id = authorId)
+        self._authors = [Person(name = author["authorName"][i],
+                                id = author["authorId"][i]) for i in range(len(author)-1)]
 
     def getTitle(self):
         return self.title
@@ -926,8 +927,9 @@ class BasicMashup:
                 if entity_class:
 
                     return entity_class(id = row["id"], title = row["name"], date = row["date"], owner = row["owner"],
-                                        place = row["place"], authorName = row["authorName"].split(";"),
-                                        authorId = row["authorId"].split(";"))
+                                        place = row["place"],
+                                        author = {"authorId": row["authorName"].split(";"),
+                                                  "authorName": row["authorName"].split(";")})
 
             # Query for person
             df_people = metadata_handler.getById(id)
