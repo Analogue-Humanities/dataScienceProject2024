@@ -928,7 +928,7 @@ class BasicMashup:
 
                     return entity_class(id = row["id"], title = row["name"], date = row["date"], owner = row["owner"],
                                         place = row["place"],
-                                        author = {"authorId": row["authorName"].split(";"),
+                                        author = {"authorId": row["authorId"].split(";"),
                                                   "authorName": row["authorName"].split(";")})
 
             # Query for person
@@ -969,8 +969,8 @@ class BasicMashup:
 
                 if entity_class:
                     allCHObjects.append(entity_class(id=row["id"], title=row["objectName"],
-                                                     authorName = row["authorName"].split(";"),
-                                                     authorId = row["authorId"].split(";"),
+                                                     author={"authorId": row["authorId"].split(";"),
+                                                             "authorName": row["authorName"].split(";")},
                                                      date=["date"], owner=["owner"], place=["place"]))
 
         return allCHObjects
@@ -998,8 +998,8 @@ class BasicMashup:
 
                 if entity_class:
                     CHObjects.append(entity_class(id=row["objectId"], title=row["title"],
-                                                  authorName = row["authorName"].split(";"),
-                                                  authorId = row["authorId"].split(";"),
+                                                author={"authorId": row["authorId"].split(";"),
+                                                          "authorName": row["authorName"].split(";")},
                                                   date=row["date"], owner=row["owner"], place=row["place"]))
 
         return CHObjects
