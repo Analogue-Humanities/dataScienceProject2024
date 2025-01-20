@@ -281,6 +281,12 @@ class MetadataUploadHandler(UploadHandler):
                 # Add date triples
                 myGraph.add((subject, date, Literal(row['Date'])))
 
+                # Produce the RDF of the owner information
+                myGraph.add((subject, owner, URIRef(owners[row['Owner']])))
+
+                # Produce and add the RDF for the place information
+                myGraph.add((subject, place, URIRef(places[row['Place']])))
+
                 # Extract author's name from the string and check if the authority is VIAF or ULAN
                 authorNameVi = re.search(  r"^[^()]*?(?= \(VIAF)", row['Author'])
                 authorNameUl = re.search(  r"^[^()]*?(?= \(ULAN)", row['Author'])
@@ -309,13 +315,9 @@ class MetadataUploadHandler(UploadHandler):
 
                 else:
                     myGraph.add((subject, author, URIRef(unknown))) # In case there were no value for author
-                    myGraph.add((URIRef(unknown), name, Literal("Unknown")))
 
-                # Produce the RDF of the owner information
-                myGraph.add((subject, owner, URIRef(owners[row['Owner']])))
-
-                # Produce and add the RDF for the place information
-                myGraph.add((subject, place, URIRef(places[row['Place']])))
+            myGraph.add((URIRef(unknown), name, Literal("Unknown"))) # Add name and id of the unknown to be consistent
+            myGraph.add((URIRef(unknown), id, Literal("Unknown")))
 
             # Produce triple based on owners names and uris
             for k, v in owners.items():
@@ -916,7 +918,7 @@ class BasicMashup:
         for metadata_handler in self.metadataQuery:
             # Query for Cultural Heritage Objects
             df_ch_objects = metadata_handler.getById(id)
-            match = df_ch_objects[df_ch_objects["id"].astype(str) == id]
+            match = df_ch_objects[df_ch_objects["id"] == id]
 
             if not match.empty:
                 row = match.iloc[0]

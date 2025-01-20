@@ -6,7 +6,10 @@
   <component name="ChangeListManager">
     <list default="true" id="fcb39a14-e122-4ee1-bd31-390232edeaa6" name="Changes" comment="Listing all the needed classes. The Handler class uses a set">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dataframes.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/impl.py" beforeDir="false" afterPath="$PROJECT_DIR$/impl.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/relational.db" beforeDir="false" afterPath="$PROJECT_DIR$/relational.db" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/running_code.py" beforeDir="false" afterPath="$PROJECT_DIR$/running_code.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -55,7 +58,7 @@
     "RunOnceActivity.git.unshallow": "true",
     "git-widget-placeholder": "main",
     "last_opened_file_path": "/home/ahmad/Desktop/Unibo/Data Science/project/dataScienceProject",
-    "settings.editor.selected.configurable": "preferences.lookFeel"
+    "settings.editor.selected.configurable": "editor.preferences.fonts.default"
   }
 }]]></component>
   <component name="RunManager">
@@ -192,26 +195,6 @@
     <breakpoint-manager>
       <breakpoints>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/dataframes.py</url>
-          <line>395</line>
-          <option name="timeStamp" value="12" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/dataframes.py</url>
-          <line>151</line>
-          <option name="timeStamp" value="13" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/dataframes.py</url>
-          <line>409</line>
-          <option name="timeStamp" value="14" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/dataframes.py</url>
-          <line>423</line>
-          <option name="timeStamp" value="15" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/test.py</url>
           <line>67</line>
           <option name="timeStamp" value="35" />
@@ -220,6 +203,11 @@
           <url>file://$PROJECT_DIR$/test.py</url>
           <line>162</line>
           <option name="timeStamp" value="41" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/impl.py</url>
+          <line>316</line>
+          <option name="timeStamp" value="45" />
         </line-breakpoint>
       </breakpoints>
     </breakpoint-manager>
