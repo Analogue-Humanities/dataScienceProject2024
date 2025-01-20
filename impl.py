@@ -9,66 +9,77 @@ from sparql_dataframe import get
 # Define the classes of the UML Data Model
 class IdentifiableEntity(object):
     def __init__(self, id: str):
-        self.id = id
+        self._id = id
 
     def getId(self) -> str:
-        return self.id
+        return self._id
 
 # The cultural Heritage Object class definition
 class CulturalHeritageObject(IdentifiableEntity):
     def __init__(self, id, title, date, owner,  place, author):
         super().__init__(id)
-        self.title = title
-        self.date = date
-        self.owner = owner
-        self.place = place
+        self._title = title
+        self._date = date
+        self._owner = owner
+        self._place = place
         self._authors = [Person(name = author["authorName"][i],
                                 id = author["authorId"][i]) for i in range(len(author)-1)]
 
     def getTitle(self):
-        return self.title
+        return self._title
 
     def getDate(self):
-        return self.date
+        return self._date
 
     def getOwner(self):
-        return self.owner
+        return self._owner
 
     def getPlace(self):
-        return self.place
+        return self._place
 
     def getAuthors(self):
         return self._authors
 
 # Define 10 types of Cultural Heritage Objects classes
 class Map(CulturalHeritageObject):
-    pass
+    def __repr__(self):
+        return f"Map(Id: '{self._id}', Title: '{self._title}')"
+
 class Model(CulturalHeritageObject):
-    pass
+    def __repr__(self):
+        return f"Model(Id: '{self._id}', Title: '{self._title}')"
 
 class Painting(CulturalHeritageObject):
-    pass
+    def __repr__(self):
+        return f"Painting(Id: '{self._id}', Title: '{self._title}')"
 
 class Specimen(CulturalHeritageObject):
-    pass
+    def __repr__(self):
+        return f"Specimen(Id: '{self._id}', Title: '{self._title}')"
 
 class Herbarium(CulturalHeritageObject):
-    pass
+    def __repr__(self):
+        return f"Herbarium(Id: '{self._id}', Title: '{self._title}')"
 
 class PrintedMaterial(CulturalHeritageObject):
-    pass
+    def __repr__(self):
+        return f"PrintedMaterial(Id: '{self._id}', Title: '{self._title}')"
 
 class PrintedVolume(CulturalHeritageObject):
-    pass
+    def __repr__(self):
+        return f"PrintedVolume(Id: '{self._id}', Title: '{self._title}')"
 
 class ManuscriptVolume(CulturalHeritageObject):
-    pass
+    def __repr__(self):
+        return f"ManuscriptVolume(Id: '{self._id}', Title: '{self._title}')"
 
 class ManuscriptPlate(CulturalHeritageObject):
-    pass
+    def __repr__(self):
+        return f"ManuscriptPlate(Id: '{self._id}', Title: '{self._title}')"
 
 class NauticalChart(CulturalHeritageObject):
-    pass
+    def __repr__(self):
+        return f"NauticalChart(Id: '{self._id}', Title: '{self._title}')"
 
 # Define Person class
 class Person(IdentifiableEntity):
@@ -76,11 +87,14 @@ class Person(IdentifiableEntity):
         super().__init__(id)
         super().getId()
         self.name = name
+
+    def __repr__(self):
+        return f"Person(Name: '{self.name}', Id: '{self._id}')"
     def getName(self):
         return self.name
 
 class Activity(object):
-    def __init__(self, institute, person, tool, start, end, refersTo):
+    def __init__(self, institute, person, tool, start, end, cultural_heritage_object):
         self.institute = institute
         self.person = person
         self.tool = set()
@@ -88,7 +102,7 @@ class Activity(object):
             self.tool.add(i)
         self.start = start
         self.end = end
-        self.refersTo = refersTo
+        self._cultural_heritage_object = cultural_heritage_object
 
     def getResponsibleInstitute(self) -> str:
         return self.institute
@@ -115,27 +129,34 @@ class Activity(object):
             return None
 
     def refersTo(self) -> CulturalHeritageObject:
-        return self.refersTo
+        return self._cultural_heritage_object
 
 class Acquisition(Activity):
-    def __init__(self,technique, institute, person, tool, start, end, refersTo):
-        super().__init__(institute, person, tool, start, end, refersTo)
+    def __init__(self,technique, institute, person, tool, start, end, cultural_heritage_object):
+        super().__init__(institute, person, tool, start, end, cultural_heritage_object)
         self.technique = technique
+
+    def __repr__(self):
+        return f"Acquisition[RefersTo Object:**'{self._cultural_heritage_object}'**]"
 
     def getTechnique(self) -> str:
         return self.technique
 
 class Processing(Activity):
-    pass
+    def __repr__(self):
+        return f"Processing[RefersTo Object:**'{self._cultural_heritage_object}'**]"
 
 class Modelling(Activity):
-    pass
+    def __repr__(self):
+        return f"Modelling[RefersTo Object:**'{self._cultural_heritage_object}'**]"
 
 class Optimising(Activity):
-    pass
+    def __repr__(self):
+        return f"Optimising[RefersTo Object:**'{self._cultural_heritage_object}'**]"
 
 class Exporting(Activity):
-    pass
+    def __repr__(self):
+        return f"Exporting[RefersTo Object:**'{self._cultural_heritage_object}'**]"
 
 # Defining operational classes
 # First the Handlers
@@ -1023,7 +1044,7 @@ class BasicMashup:
                                                         tool = row["tool"].split("; "),
                                                         start = row["start_date"],
                                                         end = row["end_date"],
-                                                        refersTo = self.getEntityById(row["object_id"])
+                                                        cultural_heritage_object = self.getEntityById(row["object_id"])
                                                         ))
 
                 elif activity_class:
@@ -1032,7 +1053,7 @@ class BasicMashup:
                                                         tool = row["tool"].split("; "),
                                                         start = row["start_date"],
                                                         end = row["end_date"],
-                                                        refersTo = self.getEntityById(row["object_id"])
+                                                        cultural_heritage_object = self.getEntityById(row["object_id"])
                                                         ))
 
         return allActivities
@@ -1052,8 +1073,8 @@ class BasicMashup:
                                                          person = ["responsible_person"],
                                                          tool = row["tool"].split("; "),
                                                          start = row["start_date"],
-                                                         end=row["end_date"],
-                                                         refersTo=self.getEntityById(row["object_id"])
+                                                         end = row["end_date"],
+                                                         cultural_heritage_object = self.getEntityById(row["object_id"])
                                                          ))
                 elif activity_class:
                     activityByInst.append(activity_class(institute = row["responsible_institute"],
@@ -1061,7 +1082,7 @@ class BasicMashup:
                                                         tool = row["tool"].split("; "),
                                                         start = row["start_date"],
                                                         end = row["end_date"],
-                                                        refersTo = self.getEntityById(row["object_id"])
+                                                        cultural_heritage_object = self.getEntityById(row["object_id"])
                                                         ))
 
         return activityByInst
@@ -1081,8 +1102,8 @@ class BasicMashup:
                                                          person = row["responsible_person"],
                                                          tool = row["tool"].split("; "),
                                                          start = row["start_date"],
-                                                         end=row["end_date"],
-                                                         refersTo=self.getEntityById(row["object_id"])
+                                                         end = row["end_date"],
+                                                         cultural_heritage_object = self.getEntityById(row["object_id"])
                                                          ))
                 elif activity_class:
                     activityByPers.append(activity_class(institute = row["responsible_institute"],
@@ -1090,7 +1111,7 @@ class BasicMashup:
                                                         tool = row["tool"].split("; "),
                                                         start = row["start_date"],
                                                         end = row["end_date"],
-                                                        refersTo = self.getEntityById(row["object_id"])
+                                                        cultural_heritage_object = self.getEntityById(row["object_id"])
                                                         ))
 
         return activityByPers
@@ -1110,8 +1131,8 @@ class BasicMashup:
                                                          person = row["responsible_person"],
                                                          tool = row["tool"].split("; "),
                                                          start = row["start_date"],
-                                                         end=row["end_date"],
-                                                         refersTo=self.getEntityById(row["object_id"])
+                                                         end = row["end_date"],
+                                                         cultural_heritage_object = self.getEntityById(row["object_id"])
                                                          ))
                 elif activity_class:
                     activityUsingTool.append(activity_class(institute = row["responsible_institute"],
@@ -1119,7 +1140,7 @@ class BasicMashup:
                                                         tool = row["tool"].split("; "),
                                                         start = row["start_date"],
                                                         end = row["end_date"],
-                                                        refersTo = self.getEntityById(row["object_id"])
+                                                        cultural_heritage_object = self.getEntityById(row["object_id"])
                                                         ))
 
         return activityUsingTool
@@ -1139,8 +1160,8 @@ class BasicMashup:
                                                          person = row["responsible_person"],
                                                          tool = row["tool"].split("; "),
                                                          start = row["start_date"],
-                                                         end=row["end_date"],
-                                                         refersTo=self.getEntityById(row["object_id"])
+                                                         end = row["end_date"],
+                                                         cultural_heritage_object = self.getEntityById(row["object_id"])
                                                          ))
                 elif activity_class:
                     activityStartedAfter.append(activity_class(institute = row["responsible_institute"],
@@ -1148,7 +1169,7 @@ class BasicMashup:
                                                         tool = row["tool"].split("; "),
                                                         start = row["start_date"],
                                                         end = row["end_date"],
-                                                        refersTo = self.getEntityById(row["object_id"])
+                                                        cultural_heritage_object = self.getEntityById(row["object_id"])
                                                         ))
         return activityStartedAfter
 
@@ -1162,21 +1183,21 @@ class BasicMashup:
                 activity_class = self.activity_to_class.get(row["type"])
 
                 if activity_class and activity_class == Acquisition:
-                    activityEndedBefore.append(activity_class(technique=row["technique"],
-                                                               institute=row["responsible_institute"],
-                                                               person=row["responsible_person"],
-                                                               tool=row["tool"].split("; "),
-                                                               start=row["start_date"],
-                                                               end=row["end_date"],
-                                                               refersTo=self.getEntityById(row["object_id"])
+                    activityEndedBefore.append(activity_class(technique = row["technique"],
+                                                               institute = row["responsible_institute"],
+                                                               person = row["responsible_person"],
+                                                               tool = row["tool"].split("; "),
+                                                               start = row["start_date"],
+                                                               end = row["end_date"],
+                                                               cultural_heritage_object = self.getEntityById(row["object_id"])
                                                                ))
                 elif activity_class:
-                    activityEndedBefore.append(activity_class(institute=row["responsible_institute"],
-                                                               person=row["responsible_person"],
-                                                               tool=row["tool"].split("; "),
-                                                               start=row["start_date"],
-                                                               end=row["end_date"],
-                                                               refersTo=self.getEntityById(row["object_id"])
+                    activityEndedBefore.append(activity_class(institute = row["responsible_institute"],
+                                                               person = row["responsible_person"],
+                                                               tool = row["tool"].split("; "),
+                                                               start = row["start_date"],
+                                                               end = row["end_date"],
+                                                               cultural_heritage_object = self.getEntityById(row["object_id"])
                                                                ))
         return activityEndedBefore
 
@@ -1190,13 +1211,13 @@ class BasicMashup:
                 activity_class = self.activity_to_class.get(row["type"])
 
                 if activity_class and activity_class == Acquisition:
-                    acquisitionByTech.append(activity_class(technique=row["technique"],
-                                                               institute=row["responsible_institute"],
-                                                               person=row["responsible_person"],
-                                                               tool=row["tool"].split("; "),
-                                                               start=row["start_date"],
-                                                               end=row["end_date"],
-                                                               refersTo=self.getEntityById(row["object_id"])
+                    acquisitionByTech.append(activity_class(technique = row["technique"],
+                                                               institute = row["responsible_institute"],
+                                                               person = row["responsible_person"],
+                                                               tool = row["tool"].split("; "),
+                                                               start = row["start_date"],
+                                                               end = row["end_date"],
+                                                               cultural_heritage_object = self.getEntityById(row["object_id"])
                                                                ))
 
         return acquisitionByTech
@@ -1207,13 +1228,11 @@ class AdvancedMashup(BasicMashup):
 
         ActivitiesByAuthor = []
         CHObjects = self.getCulturalHeritageObjectsAuthoredBy(personId)
-        print(CHObjects)
         CHObjectsIds = [Object.getId() for Object in CHObjects] # Build a list of Ids of CHObjects done by Author
-        print(CHObjectsIds)
         AllActivities = self.getAllActivities()
 
         for activity in AllActivities: # Iterate through all the activities
-            ObjectIdReferred = activity.refersTo.getId() # Get the Object referred and Get its Id
+            ObjectIdReferred = activity.refersTo().getId() # Get the Object referred and Get its Id
             if ObjectIdReferred in CHObjectsIds: # Check if te id of referred Object is in the object Ids by the Author
                 ActivitiesByAuthor.append(activity)
 
@@ -1228,7 +1247,7 @@ class AdvancedMashup(BasicMashup):
         if activitiesByResPers:
             for activity in activitiesByResPers:
 
-                ObjectByActivity = activity.refersTo # Get the Cultural Heritage Objects from activities
+                ObjectByActivity = activity.refersTo() # Get the Cultural Heritage Objects from activities
 
                 Object_Id = ObjectByActivity.getId() #Get the Object id
                 if Object_Id not in ObjectIds:
@@ -1247,7 +1266,7 @@ class AdvancedMashup(BasicMashup):
         if activitiesByResInst:
             for activity in activitiesByResInst:
 
-                ObjectByActivity = activity.refersTo
+                ObjectByActivity = activity.refersTo()
 
                 Object_Id = ObjectByActivity.getId()
                 if Object_Id not in ObjectIds:
@@ -1268,7 +1287,7 @@ class AdvancedMashup(BasicMashup):
             if hasattr(activity, "technique"): # Because only the acquisition activity has the attribute technique
                     # Check if the start and end date of the acquisition is between the given dates
                 if activity.getStartDate() > start and activity.getEndDate() < end:
-                    CHObject = activity.refersTo
+                    CHObject = activity.refersTo()
                     ObjectId = CHObject.getId()
 
                     author = self.getAuthorsOfCulturalHeritageObject(ObjectId)
