@@ -1,4 +1,4 @@
-from impl import ProcessDataQueryHandler, MetadataQueryHandler, AdvancedMashup, MetadataUploadHandler, ProcessDataUploadHandler
+from impl import ProcessDataQueryHandler, MetadataQueryHandler, AdvancedMashup
 # Once all the classes are imported, first create the relational
 # database using the related source data
 rel_path = "relational.db"
@@ -12,9 +12,9 @@ rel_path = "relational.db"
 # Then, create the graph database (remember first to run the
 # Blazegraph instance) using the related source data
 grp_endpoint = "http://127.0.0.1:9999/blazegraph/sparql"
-#metadata = MetadataUploadHandler()
-#metadata.setDbPathOrUrl(grp_endpoint)
-#metadata.pushDataToDb("data/meta.csv")
+##metadata = MetadataUploadHandler()
+##metadata.setDbPathOrUrl(grp_endpoint)
+##metadata.pushDataToDb("data/meta.csv")
 # Please remember that one could, in principle, push one or more files
 # calling the method one or more times (even calling the method twice
 # specifying the same file!)
@@ -33,15 +33,15 @@ mashup.addProcessHandler(process_qh)
 mashup.addMetadataHandler(metadata_qh)
 
 #result_1 = mashup.getAllPeople()
-#result_2 = mashup.getEntityById(id = "27")
-#result_3 = mashup.getAuthorsOfCulturalHeritageObject(objectId = "24")
-#result_4 = mashup.getCulturalHeritageObjectsAuthoredBy(personId="VIAF:100190422")
+#result_2 = mashup.getEntityById(id = "1")
+#result_3 = mashup.getAuthorsOfCulturalHeritageObject(objectId = "34")
+result_4 = mashup.getCulturalHeritageObjectsAuthoredBy(personId="VIAF:100190422")
 #result_5 = mashup.getAllActivities()
 #result_6 = mashup.getAllActivities()
 #result_7 = mashup.getActivitiesByResponsibleInstitution("hilology")
 #result_8 = mashup.getActivitiesByResponsiblePerson("Liddell")
 #result_9 = mashup.getActivitiesUsingTool("Nikon")
-result_10 = mashup.getActivitiesStartedAfter("2023-10-01")
+#result_10 = mashup.getActivitiesStartedAfter("2023-10-01")
 #result_11 = mashup.getActivitiesEndedBefore("2023-01-01")
 #result_12 = mashup.getAcquisitionsByTechnique("3D")
 #result_13 = mashup.getObjectsHandledByResponsiblePerson("Byron")
@@ -49,16 +49,16 @@ result_10 = mashup.getActivitiesStartedAfter("2023-10-01")
 #result_15 = mashup.getAuthorsOfObjectsAcquiredInTimeFrame("2023-04-15", "2023-04-20")
 #result_16 = mashup.getActivitiesOnObjectsAuthoredBy("VIAF:100190422")
 
-#print(result_2.getAuthors().getId())
+#print(result_2.getAuthors()[0].getId())
 #print(result_2)
-#print(result_3)
-#print(len(result_4))
+#print(result_3[0].getId())
+print(result_4[0].getAuthors()[0].getName())
 #print(f"result_5{result_5}")
 #print(result_5[1].refersTo.getTitle())
 #print(len(result_7))
 #res = result_8[0]
 #print(res.refersTo.getId())
-print(result_10[4].getResponsibleInstitute())
+#print(result_10[0].getStartDate())
 #print(result_11)
 #print(result_12)
 #print(result_13)
