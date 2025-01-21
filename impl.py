@@ -247,8 +247,6 @@ class MetadataUploadHandler(UploadHandler):
         owner = URIRef("https://schema.org/owns")
         place = URIRef("https://schema.org/location")
 
-        types = set()
-
         # Linnaeus VIAF which was not in the source file is added to the database
         Linnaeus_id = "VIAF:34594730"
         parenthesis_Pattern = re.compile(r"\(.*?\)")
@@ -281,13 +279,12 @@ class MetadataUploadHandler(UploadHandler):
 
                 objTitle = row["Title"].replace(" ","_")
                 subject = URIRef(base_url+"/cHObject/"+row["Id"]+"_"+objTitle)
-                #subjects[row['Id']] = subject
-                types.update(row['Type'])
+
                 newType = MetadataUploadHandler.makeClassName(self, row['Type'])
                 # Add the triples of subject and the type to the Graph
                 myGraph.add((subject, RDF.type, type_classes[newType]))
-                # Adding the literal names of types as they are in the database
 
+                # Adding the literal names of types as they are in the database
                 if (type_classes[newType], name, Literal(newType)) not in myGraph:
                     myGraph.add((type_classes[newType], name, Literal(newType)))
 
@@ -380,10 +377,11 @@ class MetadataUploadHandler(UploadHandler):
             return False
 
     def makeClassName(self, name: str) ->str:
+        newClassName = ""
         n = name.split()
-        newClassName = n[0]
-        if len(n)>1:
-            newClassName = newClassName+n[1].capitalize()
+        for i in n:
+            newClassName += i.capitalize()
+
         return newClassName
 
 class ProcessDataUploadHandler(UploadHandler):

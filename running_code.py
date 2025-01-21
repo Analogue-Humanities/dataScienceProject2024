@@ -1,10 +1,10 @@
-from impl import ProcessDataQueryHandler, MetadataQueryHandler, AdvancedMashup
+from impl import ProcessDataQueryHandler, MetadataQueryHandler, AdvancedMashup, ProcessDataUploadHandler, MetadataUploadHandler
 # Once all the classes are imported, first create the relational
 # database using the related source data
 rel_path = "relational.db"
-#process = ProcessDataUploadHandler()
-#process.setDbPathOrUrl(rel_path)
-#process.pushDataToDb("data/process.json")
+process = ProcessDataUploadHandler()
+process.setDbPathOrUrl(rel_path)
+process.pushDataToDb("data/process.json")
 # Please remember that one could, in principle, push one or more files
 # calling the method one or more times (even calling the method twice
 # specifying the same file!)
@@ -12,9 +12,9 @@ rel_path = "relational.db"
 # Then, create the graph database (remember first to run the
 # Blazegraph instance) using the related source data
 grp_endpoint = "http://127.0.0.1:9999/blazegraph/sparql"
-##metadata = MetadataUploadHandler()
-##metadata.setDbPathOrUrl(grp_endpoint)
-##metadata.pushDataToDb("data/meta.csv")
+metadata = MetadataUploadHandler()
+metadata.setDbPathOrUrl(grp_endpoint)
+metadata.pushDataToDb("data/meta.csv")
 # Please remember that one could, in principle, push one or more files
 # calling the method one or more times (even calling the method twice
 # specifying the same file!)
@@ -32,7 +32,7 @@ mashup = AdvancedMashup()
 mashup.addProcessHandler(process_qh)
 mashup.addMetadataHandler(metadata_qh)
 
-#result_1 = mashup.getAllPeople()
+result_1 = mashup.getAllPeople()
 #result_2 = mashup.getEntityById(id = "31")
 #result_3 = mashup.getAuthorsOfCulturalHeritageObject(objectId = "34")
 #result_4 = mashup.getCulturalHeritageObjectsAuthoredBy(personId="VIAF:100190422")
@@ -46,9 +46,10 @@ mashup.addMetadataHandler(metadata_qh)
 #result_12 = mashup.getAcquisitionsByTechnique("3D")
 #result_13 = mashup.getObjectsHandledByResponsiblePerson("Byron")
 #result_14 = mashup.getObjectsHandledByResponsibleInstitution("Philology")
-#result_15 = mashup.getAuthorsOfObjectsAcquiredInTimeFrame("2023-04-15", "2023-04-20")
-#result_16 = mashup.getActivitiesOnObjectsAuthoredBy("ULAN:500114874")
+result_15 = mashup.getAuthorsOfObjectsAcquiredInTimeFrame("2023-04-15", "2023-04-20")
+result_16 = mashup.getActivitiesOnObjectsAuthoredBy("ULAN:500114874")
 
+print(result_1)
 #print(result_2.getAuthors()[0].getId())
 #print(result_2)
 #print(result_3)
@@ -63,6 +64,6 @@ mashup.addMetadataHandler(metadata_qh)
 #print(result_12)
 #print(result_13)
 #print([i.getId() for i in result_14])
-#for i in result_15:
-#    print(i.getId())
-#print(result_16)
+for i in result_15:
+    print(i.getId())
+print(result_16)
