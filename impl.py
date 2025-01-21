@@ -200,8 +200,6 @@ class MetadataUploadHandler(UploadHandler):
 
         myGraph = Graph()
 
-        #IMPORTANT: OR I CAN MAKE A SET IN THE FOR LOOP BELOW TO
-        #LAST SOLUTION : TO MAKE A DICTIONARY OUT OF THEM AND MAKE ALL THE VARIABLES INTO STRINGS. AND IT WORKS
         # Classes of Cultural Heritage Objects
         type_classes = {'NauticalChart' : URIRef("https://www.wikidata.org/wiki/Q728502"),
         'PrintedVolume' : URIRef("https://schema.org/Book"),
@@ -250,7 +248,6 @@ class MetadataUploadHandler(UploadHandler):
         place = URIRef("https://schema.org/location")
 
         types = set()
-        authorMapping = {}
 
         # Linnaeus VIAF which was not in the source file is added to the database
         Linnaeus_id = "VIAF:34594730"
@@ -317,8 +314,7 @@ class MetadataUploadHandler(UploadHandler):
                     authorName = authorNameVi.group()
                     viafId = ''.join(filter(lambda i: i.isdigit(), row['Author']))
                     authorId = URIRef("https://viaf.org/viaf/" + viafId)
-                    # Add the Authors and value it's pair of URI to a dictionary to use it later
-                    authorMapping[authorName] = authorId
+
                     myGraph.add((subject, author, authorId))
                     myGraph.add((authorId, id, Literal('VIAF:'+viafId)))
                     myGraph.add((authorId, name, Literal(authorName)))
@@ -328,7 +324,6 @@ class MetadataUploadHandler(UploadHandler):
                     authorName = authorNameUl.group()
                     ulanId = ''.join(filter(lambda i: i.isdigit(), row['Author']))
                     authorId = URIRef("http://vocab.getty.edu/page/ulan/" + ulanId)
-                    authorMapping[authorName] = authorId
 
                     myGraph.add((subject, author, authorId))
                     myGraph.add((authorId, id, Literal('ULAN:'+ulanId))) # This will be repeated. make a set and put the operation out of the loop
@@ -800,9 +795,6 @@ class ProcessDataQueryHandler(QueryHandler):
                                 WHERE start_date > date('{date}');
                         """
             df_activityBySD = read_sql(query, con)
-#            df_activityBySD = to_datetime(df_activityBySD["start_date"])
-            # I should store the dates as sate type
-
 
         df_activityBySD.drop(
             df_activityBySD[
@@ -848,6 +840,7 @@ class ProcessDataQueryHandler(QueryHandler):
                         """
             df_activityByED = read_sql(query, con)
 
+            # Drop the rows that there is No responsible institute. Because No activity is done in the latter row
             df_activityByED.drop(
                 df_activityByED[
                     (df_activityByED["responsible_institute"].isnull() | (df_activityByED
