@@ -86,45 +86,45 @@ class Person(IdentifiableEntity):
     def __init__(self, name, id=None):
         super().__init__(id)
         super().getId()
-        self.name = name
+        self._name = name
 
     def __repr__(self):
-        return f"Person(Name: '{self.name}', Id: '{self._id}')"
+        return f"Person(Name: '{self._name}', Id: '{self._id}')"
     def getName(self):
-        return self.name
+        return self._name
 
 class Activity(object):
     def __init__(self, institute, person, tool, start, end, cultural_heritage_object):
-        self.institute = institute
-        self.person = person
-        self.tool = set()
+        self._institute = institute
+        self._person = person
+        self._tool = set()
         for i in tool:
-            self.tool.add(i)
-        self.start = start
-        self.end = end
+            self._tool.add(i)
+        self._start = start
+        self._end = end
         self._cultural_heritage_object = cultural_heritage_object
 
     def getResponsibleInstitute(self) -> str:
-        return self.institute
+        return self._institute
 
     def getResponsiblePerson(self)  -> str or None:
-        if self.person:
-            return self.person
+        if self._person:
+            return self._person
         else:
             return None
 
     def getTools(self) -> set:
-        return self.tool
+        return self._tool
 
     def getStartDate(self) -> str or None:
-        if self.start:
-            return self.start
+        if self._start:
+            return self._start
         else:
             return None
 
     def getEndDate(self) -> str or None:
-        if self.end:
-            return self.end
+        if self._end:
+            return self._end
         else:
             return None
 
@@ -134,13 +134,13 @@ class Activity(object):
 class Acquisition(Activity):
     def __init__(self,technique, institute, person, tool, start, end, cultural_heritage_object):
         super().__init__(institute, person, tool, start, end, cultural_heritage_object)
-        self.technique = technique
+        self._technique = technique
 
     def __repr__(self):
         return f"Acquisition[RefersTo Object:**'{self._cultural_heritage_object}'**]"
 
     def getTechnique(self) -> str:
-        return self.technique
+        return self._technique
 
 class Processing(Activity):
     def __repr__(self):
@@ -201,16 +201,16 @@ class MetadataUploadHandler(UploadHandler):
         myGraph = Graph()
 
         # Classes of Cultural Heritage Objects
-        type_classes = {'NauticalChart' : URIRef("https://www.wikidata.org/wiki/Q728502"),
-        'PrintedVolume' : URIRef("https://schema.org/Book"),
-        'Herbarium' : URIRef("https://www.wikidata.org/wiki/Q181916"),
-        'PrintedMaterial' : URIRef("https://www.wikidata.org/wiki/Q1261026"),
-        'Specimen' : URIRef("https://www.wikidata.org/wiki/Q85869058"),
-        'Painting' : URIRef("https://schema.org/Painting"),
-        'Map' : URIRef("https://schema.org/Map"),
-        'ManuscriptVolume' : URIRef("https://schema.org/ArchiveComponent"),
-        'ManuscriptPlate' : URIRef("https://schema.org/Manuscript"),
-        'Model' : URIRef("https://www.wikidata.org/wiki/Q1979154")}
+        type_classes = {'NauticalChart' : "https://www.wikidata.org/wiki/Q728502",
+        'PrintedVolume' : "https://schema.org/Book",
+        'Herbarium' : "https://www.wikidata.org/wiki/Q181916",
+        'PrintedMaterial' : "https://www.wikidata.org/wiki/Q1261026",
+        'Specimen' : "https://www.wikidata.org/wiki/Q85869058",
+        'Painting' : "https://schema.org/Painting",
+        'Map' : "https://schema.org/Map",
+        'ManuscriptVolume' : "https://schema.org/ArchiveComponent",
+        'ManuscriptPlate' : "https://schema.org/Manuscript",
+        'Model' : "https://www.wikidata.org/wiki/Q1979154"}
 
         owners = {'BUB' : "https://www.wikidata.org/wiki/Q2901539", # Biblioteca Universitaria di Bologna
         'Sistema Museale di Ateneo di Bologna' : "https://www.wikidata.org/wiki/Q3485343",
@@ -282,11 +282,11 @@ class MetadataUploadHandler(UploadHandler):
 
                 newType = MetadataUploadHandler.makeClassName(self, row['Type'])
                 # Add the triples of subject and the type to the Graph
-                myGraph.add((subject, RDF.type, type_classes[newType]))
+                myGraph.add((subject, RDF.type, URIRef(type_classes[newType])))
 
                 # Adding the literal names of types as they are in the database
-                if (type_classes[newType], name, Literal(newType)) not in myGraph:
-                    myGraph.add((type_classes[newType], name, Literal(newType)))
+                if (URIRef(type_classes[newType]), name, Literal(newType)) not in myGraph:
+                    myGraph.add((URIRef(type_classes[newType]), name, Literal(newType)))
 
                 # Add th triples of subject and id to the Graph
                 myGraph.add((subject, id, Literal(row['Id'])))
@@ -314,17 +314,17 @@ class MetadataUploadHandler(UploadHandler):
 
                     myGraph.add((subject, author, authorId))
                     myGraph.add((authorId, id, Literal('VIAF:'+viafId)))
-                    myGraph.add((authorId, name, Literal(authorName)))
+                    myGraph.add((authorId, name, Literal(authorName)))   #This will be repeated. put a duplicate catcher?
                     myGraph.add((authorId, RDF.type, URIRef(person)))
-
+                    # I think we should put the ";" mechanism here for separating the authors.
                 elif authorNameUl:
                     authorName = authorNameUl.group()
                     ulanId = ''.join(filter(lambda i: i.isdigit(), row['Author']))
                     authorId = URIRef("http://vocab.getty.edu/page/ulan/" + ulanId)
 
                     myGraph.add((subject, author, authorId))
-                    myGraph.add((authorId, id, Literal('ULAN:'+ulanId))) # This will be repeated. make a set and put the operation out of the loop
-                    myGraph.add((authorId, name, Literal(authorName)))  # This will be repeated. make a set and put the operation out of the loop
+                    myGraph.add((authorId, id, Literal('ULAN:'+ulanId)))
+                    myGraph.add((authorId, name, Literal(authorName)))  # This will be repeated. put a duplicate catcher?
                     myGraph.add((authorId, RDF.type, URIRef(person)))
 
                 else:
@@ -965,7 +965,7 @@ class BasicMashup:
 
             # Convert the data of each row and to the object Person and add them to the list
             for _, row in df_people.iterrows():
-                person = Person(id=row["id"], name=row["name"])
+                person = Person(id = row["id"], name = row["name"])
                 allPeople.append(person)
 
         return allPeople
@@ -982,10 +982,10 @@ class BasicMashup:
                 entity_class = self.type_to_class.get(row["type"])
 
                 if entity_class:
-                    allCHObjects.append(entity_class(id=row["id"], title=row["objectName"],
-                                                     author={"authorId": row["authorId"].split(";"),
+                    allCHObjects.append(entity_class(id = row["id"], title = row["objectName"],
+                                                     author = {"authorId": row["authorId"].split(";"),
                                                              "authorName": row["authorName"].split(";")},
-                                                     date=["date"], owner=["owner"], place=["place"]))
+                                                     date = ["date"], owner = ["owner"], place = ["place"]))
 
         return allCHObjects
 
@@ -996,7 +996,7 @@ class BasicMashup:
             df_authors = metadata_handler.getAuthorsOfCulturalHeritageObject(objectId)
 
             for _, row in df_authors.iterrows():
-                author = Person(id=row["id"], name=row["author"])
+                author = Person(id = row["id"], name = row["author"])
                 allAuthors.append(author)
 
         return allAuthors
@@ -1011,10 +1011,10 @@ class BasicMashup:
                 entity_class = self.type_to_class.get(row["type"])
 
                 if entity_class:
-                    CHObjects.append(entity_class(id=row["objectId"], title=row["title"],
-                                                author={"authorId": row["authorId"].split(";"),
+                    CHObjects.append(entity_class(id = row["objectId"], title = row["title"],
+                                                author = {"authorId": row["authorId"].split(";"),
                                                           "authorName": row["authorName"].split(";")},
-                                                  date=row["date"], owner=row["owner"], place=row["place"]))
+                                                  date = row["date"], owner = row["owner"], place = row["place"]))
 
         return CHObjects
 
