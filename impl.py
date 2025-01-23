@@ -23,7 +23,7 @@ class CulturalHeritageObject(IdentifiableEntity):
         self._owner = owner
         self._place = place
         self._authors = [Person(name = author["authorName"][i],
-                                id = author["authorId"][i]) for i in range(len(author)-1)]
+                                id = author["authorId"][i]) for i in range(len(author["authorName"]))]
 
     def getTitle(self):
         return self._title
@@ -303,32 +303,48 @@ class MetadataUploadHandler(UploadHandler):
                 # Produce and add the RDF for the place information
                 myGraph.add((subject, place, URIRef(places[row['Place']])))
 
-                # Extract author's name from the string and check if the authority is VIAF or ULAN
-                authorNameVi = re.search(  r"^[^()]*?(?= \(VIAF)", row['Author'])
-                authorNameUl = re.search(  r"^[^()]*?(?= \(ULAN)", row['Author'])
+                all_authors = row['Author'].split("; ") # Separate the authors in case there are more than one author
 
-                if authorNameVi:
-                    authorName = authorNameVi.group()
-                    viafId = ''.join(filter(lambda i: i.isdigit(), row['Author']))
-                    authorId = URIRef("https://viaf.org/viaf/" + viafId)
+                for auth in all_authors:
 
-                    myGraph.add((subject, author, authorId))
-                    myGraph.add((authorId, id, Literal('VIAF:'+viafId)))
-                    myGraph.add((authorId, name, Literal(authorName)))   #This will be repeated. put a duplicate catcher?
-                    myGraph.add((authorId, RDF.type, URIRef(person)))
-                    # I think we should put the ";" mechanism here for separating the authors.
-                elif authorNameUl:
-                    authorName = authorNameUl.group()
-                    ulanId = ''.join(filter(lambda i: i.isdigit(), row['Author']))
-                    authorId = URIRef("http://vocab.getty.edu/page/ulan/" + ulanId)
+                    # Extract author's name from the string and check if the authority is VIAF or ULAN
+                    authorNameVi = re.search(  r"^[^()]*?(?= \(VIAF)", auth)
+                    authorNameUl = re.search(  r"^[^()]*?(?= \(ULAN)", auth)
 
-                    myGraph.add((subject, author, authorId))
-                    myGraph.add((authorId, id, Literal('ULAN:'+ulanId)))
-                    myGraph.add((authorId, name, Literal(authorName)))  # This will be repeated. put a duplicate catcher?
-                    myGraph.add((authorId, RDF.type, URIRef(person)))
+                    if authorNameVi:
+                        authorName = authorNameVi.group()
+                        viafId = ''.join(filter(lambda i: i.isdigit(), auth))
+                        authorId = URIRef("https://viaf.org/viaf/" + viafId)
 
-                else:
-                    myGraph.add((subject, author, URIRef(unknown))) # In case there were no value for author
+                        myGraph.add((subject, author, authorId))
+
+                        if (authorId, id, Literal('VIAF:'+viafId)) not in myGraph:
+                            myGraph.add((authorId, id, Literal('VIAF:'+viafId)))
+
+                        if (authorId, name, Literal(authorName)) not in myGraph:
+                            myGraph.add((authorId, name, Literal(authorName)))
+
+                        if (authorId, RDF.type, URIRef(person)) not in myGraph:
+                            myGraph.add((authorId, RDF.type, URIRef(person)))
+
+                    elif authorNameUl:
+                        authorName = authorNameUl.group()
+                        ulanId = ''.join(filter(lambda i: i.isdigit(), auth))
+                        authorId = URIRef("http://vocab.getty.edu/page/ulan/" + ulanId)
+
+                        myGraph.add((subject, author, authorId))
+
+                        if (authorId, id, Literal('ULAN:'+ulanId)) not in myGraph:
+                            myGraph.add((authorId, id, Literal('ULAN:'+ulanId)))
+
+                        if (authorId, name, Literal(authorName)) not in myGraph:
+                            myGraph.add((authorId, name, Literal(authorName)))
+
+                        if (authorId, RDF.type, URIRef(person)) not in myGraph:
+                            myGraph.add((authorId, RDF.type, URIRef(person)))
+
+                    else:
+                        myGraph.add((subject, author, URIRef(unknown))) # In case there were no value for author
 
             myGraph.add((URIRef(unknown), name, Literal("Unknown"))) # Add name and id of the unknown to be consistent
             myGraph.add((URIRef(unknown), id, Literal("Unknown")))
@@ -488,7 +504,7 @@ class MetadataQueryHandler(QueryHandler):
 
     def getAllPeople(self) -> DataFrame:
 
-        endpoint = MetadataUploadHandler.getDbPathOrUrl(self)
+        endpoint = self.getDbPathOrUrl()
         query = """
                PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
                PREFIX schema: <https://schema.org/>
@@ -614,11 +630,12 @@ class ProcessDataQueryHandler(QueryHandler):
                     FROM Processing;
                     
             """
-            df_activities = read_sql(query, con)
+            df_activities = read_sql(query, con).astype(str)
 
             df_activities.drop(
                 df_activities[
-                    (df_activities["responsible_institute"].isnull() | (df_activities["responsible_institute"] == ""))
+                    ((df_activities["responsible_institute"] == "") & (df_activities["start_date"] == "")
+                   &  (df_activities["responsible_person"] == ""))
                     ].index,
                 inplace=True
             )
@@ -658,12 +675,13 @@ class ProcessDataQueryHandler(QueryHandler):
                     FROM Processing
                     WHERE responsible_institute LIKE '%{partialName}%';
             """
-            df_activityByInstitute = read_sql(query, con)
+            df_activityByInstitute = read_sql(query, con).astype(str)
 
             df_activityByInstitute.drop(
                 df_activityByInstitute[
-                    (df_activityByInstitute["responsible_institute"].isnull() | (df_activityByInstitute
-                                                    ["responsible_institute"] == ""))].index,
+                    ((df_activityByInstitute["responsible_institute"] == "")
+                     & (df_activityByInstitute["start_date"] == "")
+                     & (df_activityByInstitute["responsible_person"] == ""))].index,
                 inplace=True
             )
 
@@ -703,12 +721,13 @@ class ProcessDataQueryHandler(QueryHandler):
                                FROM Processing
                                WHERE responsible_person LIKE '%{partialName}%';
                        """
-            df_activityByPerson = read_sql(query, con)
+            df_activityByPerson = read_sql(query, con).astype(str)
 
             df_activityByPerson.drop(
                 df_activityByPerson[
-                    (df_activityByPerson["responsible_institute"].isnull() | (df_activityByPerson
-                                                                    ["responsible_institute"] == ""))].index,
+                    ((df_activityByPerson["responsible_institute"] == "")
+                     & (df_activityByPerson["start_date"] == "")
+                     & (df_activityByPerson["responsible_person"] == ""))].index,
                 inplace=True
             )
 
@@ -752,8 +771,9 @@ class ProcessDataQueryHandler(QueryHandler):
 
             df_activityByTool.drop(
                 df_activityByTool[
-                    (df_activityByTool["responsible_institute"].isnull() | (df_activityByTool
-                                           ["responsible_institute"] == ""))].index,inplace=True
+                    ((df_activityByTool["responsible_institute"] == "")
+                     & (df_activityByTool["start_date"] == "")
+                     & (df_activityByTool["responsible_person"] == ""))].index,inplace=True
             )
 
             df_activityByTool.reset_index(drop=True, inplace=True)
@@ -796,8 +816,9 @@ class ProcessDataQueryHandler(QueryHandler):
 
         df_activityBySD.drop(
             df_activityBySD[
-                (df_activityBySD["responsible_institute"].isnull() | (df_activityBySD
-                                                        ["responsible_institute"] == ""))].index, inplace=True
+                ((df_activityBySD["responsible_institute"] == "")
+                 & (df_activityBySD["start_date"] == "")
+                 & (df_activityBySD["responsible_person"] == ""))].index, inplace=True
         )
 
         df_activityBySD.reset_index(drop=True, inplace=True)
@@ -841,9 +862,9 @@ class ProcessDataQueryHandler(QueryHandler):
             # Drop the rows that there is No responsible institute. Because No activity is done in the latter row
             df_activityByED.drop(
                 df_activityByED[
-                    (df_activityByED["responsible_institute"].isnull() | (df_activityByED
-                                                                          ["responsible_institute"] == ""))].index,
-                inplace=True
+                    ((df_activityByED["responsible_institute"] == "")
+                     & (df_activityByED["start_date"] == "")
+                     & (df_activityByED["responsible_person"] == ""))].index, inplace=True
             )
 
             df_activityByED.reset_index(drop=True, inplace=True)
@@ -861,8 +882,9 @@ class ProcessDataQueryHandler(QueryHandler):
 
             df_acquisitionByTech.drop(
                 df_acquisitionByTech[
-                    (df_acquisitionByTech["responsible_institute"].isnull() | (df_acquisitionByTech
-                                                        ["responsible_institute"] == ""))].index,inplace=True
+                    ((df_acquisitionByTech["responsible_institute"] == "")
+                     & (df_acquisitionByTech["start_date"] == "")
+                     & (df_acquisitionByTech["responsible_person"] == ""))].index, inplace=True
             )
 
             df_acquisitionByTech.reset_index(drop=True, inplace=True)
@@ -931,19 +953,25 @@ class BasicMashup:
         for metadata_handler in self.metadataQuery:
             # Query for Cultural Heritage Objects
             df_ch_objects = metadata_handler.getById(id)
-            match = df_ch_objects[df_ch_objects["id"] == id]
 
+            # Group by id and ... and  make a list of author's data in the corresponding column
+            match = df_ch_objects.groupby(["id", "type", "name", "date", "owner", "place"]).agg({
+                'authorName' : lambda x: list(x.unique()), # Take only the unique values of authors
+                'authorId' : lambda  x: list(x.unique())
+            }).reset_index()
             if not match.empty:
                 row = match.iloc[0]
 
-                # Dynamically construct the object based on the type
+             # Dynamically construct the object based on the type
                 entity_class = self.type_to_class.get(row["type"])
                 if entity_class:
-
-                    return entity_class(id = row["id"], title = row["name"], date = row["date"], owner = row["owner"],
-                                        place = row["place"],
-                                        author = {"authorId": row["authorId"].split(";"),
-                                                  "authorName": row["authorName"].split(";")})
+                    return entity_class(id = row["id"],
+                                        title = row["name"],
+                                        author={"authorId": row["authorId"],
+                                         "authorName": row["authorName"]},
+                                        date=["date"],
+                                        owner=["owner"],
+                                        place=["place"])
 
             # Query for person
             df_people = metadata_handler.getById(id)
@@ -977,15 +1005,24 @@ class BasicMashup:
         for metadata_handler in self.metadataQuery:
             df_CHObjects = metadata_handler.getAllCulturalHeritageObjects()
 
+            df_CHObjects = df_CHObjects.groupby(["id", "objectName"]).agg({
+                'authorName' : lambda x: list(x.unique()),
+                'authorId' : lambda  x: list(x.unique()),
+                **{col: 'first' for col in ["type", "date", "owner", "place"]}
+            }).reset_index()
+
             for _, row in df_CHObjects.iterrows():
                 # Dynamically construct the object based on the type
                 entity_class = self.type_to_class.get(row["type"])
 
                 if entity_class:
-                    allCHObjects.append(entity_class(id = row["id"], title = row["objectName"],
-                                                     author = {"authorId": row["authorId"].split(";"),
-                                                             "authorName": row["authorName"].split(";")},
-                                                     date = ["date"], owner = ["owner"], place = ["place"]))
+                    allCHObjects.append(entity_class(id = row["id"],
+                                                     title = row["objectName"],
+                                                     author = {"authorId": row["authorId"],
+                                                             "authorName": row["authorName"]},
+                                                     date = ["date"],
+                                                     owner = ["owner"],
+                                                     place = ["place"]))
 
         return allCHObjects
 
@@ -1007,14 +1044,23 @@ class BasicMashup:
         for metadata_handler in self.metadataQuery:
             df_CHObjects = metadata_handler.getCulturalHeritageObjectsAuthoredBy(personId)
 
+            df_CHObjects = df_CHObjects.groupby(["objectId", "title"]).agg({
+                'authorName' : lambda x: list(x),
+                'authorId' : lambda  x: list(x),
+                **{col: 'first' for col in ["type", "date", "owner", "place"]}
+            }).reset_index()
+
             for _, row in df_CHObjects.iterrows():
                 entity_class = self.type_to_class.get(row["type"])
 
                 if entity_class:
-                    CHObjects.append(entity_class(id = row["objectId"], title = row["title"],
-                                                author = {"authorId": row["authorId"].split(";"),
-                                                          "authorName": row["authorName"].split(";")},
-                                                  date = row["date"], owner = row["owner"], place = row["place"]))
+                    CHObjects.append(entity_class(id = row["objectId"],
+                                                  title = row["title"],
+                                                author = {"authorId": row["authorId"],
+                                                          "authorName": row["authorName"]},
+                                                  date = row["date"],
+                                                  owner = row["owner"],
+                                                  place = row["place"]))
 
         return CHObjects
 
