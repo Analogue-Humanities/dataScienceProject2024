@@ -9,33 +9,33 @@ from sparql_dataframe import get
 # Define the classes of the UML Data Model
 class IdentifiableEntity(object):
     def __init__(self, id: str):
-        self._id = id
+        self.id = id
 
     def getId(self) -> str:
-        return self._id
+        return self.id
 
 # The cultural Heritage Object class definition
 class CulturalHeritageObject(IdentifiableEntity):
     def __init__(self, id, title, date, owner,  place, author):
         super().__init__(id)
-        self._title = title
-        self._date = date
-        self._owner = owner
-        self._place = place
+        self.title = title
+        self.date = date
+        self.owner = owner
+        self.place = place
         self._authors = [Person(name = author["authorName"][i],
                                 id = author["authorId"][i]) for i in range(len(author["authorName"]))]
 
     def getTitle(self):
-        return self._title
+        return self.title
 
     def getDate(self):
-        return self._date
+        return self.date
 
     def getOwner(self):
-        return self._owner
+        return self.owner
 
     def getPlace(self):
-        return self._place
+        return self.place
 
     def getAuthors(self):
         return self._authors
@@ -43,88 +43,88 @@ class CulturalHeritageObject(IdentifiableEntity):
 # Define 10 types of Cultural Heritage Objects classes
 class Map(CulturalHeritageObject):
     def __repr__(self):
-        return f"Map(Id: '{self._id}', Title: '{self._title}')"
+        return f"Map(Id: '{self.id}', Title: '{self.title}')"
 
 class Model(CulturalHeritageObject):
     def __repr__(self):
-        return f"Model(Id: '{self._id}', Title: '{self._title}')"
+        return f"Model(Id: '{self.id}', Title: '{self.title}')"
 
 class Painting(CulturalHeritageObject):
     def __repr__(self):
-        return f"Painting(Id: '{self._id}', Title: '{self._title}')"
+        return f"Painting(Id: '{self.id}', Title: '{self.title}')"
 
 class Specimen(CulturalHeritageObject):
     def __repr__(self):
-        return f"Specimen(Id: '{self._id}', Title: '{self._title}')"
+        return f"Specimen(Id: '{self.id}', Title: '{self.title}')"
 
 class Herbarium(CulturalHeritageObject):
     def __repr__(self):
-        return f"Herbarium(Id: '{self._id}', Title: '{self._title}')"
+        return f"Herbarium(Id: '{self.id}', Title: '{self.title}')"
 
 class PrintedMaterial(CulturalHeritageObject):
     def __repr__(self):
-        return f"PrintedMaterial(Id: '{self._id}', Title: '{self._title}')"
+        return f"PrintedMaterial(Id: '{self.id}', Title: '{self.title}')"
 
 class PrintedVolume(CulturalHeritageObject):
     def __repr__(self):
-        return f"PrintedVolume(Id: '{self._id}', Title: '{self._title}')"
+        return f"PrintedVolume(Id: '{self.id}', Title: '{self.title}')"
 
 class ManuscriptVolume(CulturalHeritageObject):
     def __repr__(self):
-        return f"ManuscriptVolume(Id: '{self._id}', Title: '{self._title}')"
+        return f"ManuscriptVolume(Id: '{self.id}', Title: '{self.title}')"
 
 class ManuscriptPlate(CulturalHeritageObject):
     def __repr__(self):
-        return f"ManuscriptPlate(Id: '{self._id}', Title: '{self._title}')"
+        return f"ManuscriptPlate(Id: '{self.id}', Title: '{self.title}')"
 
 class NauticalChart(CulturalHeritageObject):
     def __repr__(self):
-        return f"NauticalChart(Id: '{self._id}', Title: '{self._title}')"
+        return f"NauticalChart(Id: '{self.id}', Title: '{self.title}')"
 
 # Define Person class
 class Person(IdentifiableEntity):
     def __init__(self, name, id=None):
         super().__init__(id)
         super().getId()
-        self._name = name
+        self.name = name
 
     def __repr__(self):
-        return f"Person(Name: '{self._name}', Id: '{self._id}')"
+        return f"Person(Name: '{self.name}', Id: '{self.id}')"
     def getName(self):
-        return self._name
+        return self.name
 
 class Activity(object):
     def __init__(self, institute, person, tool, start, end, cultural_heritage_object):
-        self._institute = institute
-        self._person = person
-        self._tool = set()
+        self.institute = institute
+        self.person = person
+        self.tool = set()
         for i in tool:
-            self._tool.add(i)
-        self._start = start
-        self._end = end
+            self.tool.add(i)
+        self.start = start
+        self.end = end
         self._cultural_heritage_object = cultural_heritage_object
 
     def getResponsibleInstitute(self) -> str:
-        return self._institute
+        return self.institute
 
     def getResponsiblePerson(self)  -> str or None:
-        if self._person:
-            return self._person
+        if self.person:
+            return self.person
         else:
             return None
 
     def getTools(self) -> set:
-        return self._tool
+        return self.tool
 
     def getStartDate(self) -> str or None:
-        if self._start:
-            return self._start
+        if self.start:
+            return self.start
         else:
             return None
 
     def getEndDate(self) -> str or None:
-        if self._end:
-            return self._end
+        if self.end:
+            return self.end
         else:
             return None
 
@@ -134,13 +134,13 @@ class Activity(object):
 class Acquisition(Activity):
     def __init__(self,technique, institute, person, tool, start, end, cultural_heritage_object):
         super().__init__(institute, person, tool, start, end, cultural_heritage_object)
-        self._technique = technique
+        self.technique = technique
 
     def __repr__(self):
         return f"Acquisition[RefersTo Object:**'{self._cultural_heritage_object}'**]"
 
     def getTechnique(self) -> str:
-        return self._technique
+        return self.technique
 
 class Processing(Activity):
     def __repr__(self):
