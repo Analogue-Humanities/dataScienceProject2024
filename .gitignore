@@ -1,11 +1,8 @@
 # created by virtualenv automatically
 *.log
-test.csv
 __pycache__
 .venv
 running_code.py
 blazegraph.jar
 blazegraph.jnl
 .idea
-data/trash_class.py
-data/copy_of_impl.py

@@ -969,9 +969,9 @@ class BasicMashup:
                                         title = row["name"],
                                         author={"authorId": row["authorId"],
                                          "authorName": row["authorName"]},
-                                        date=["date"],
-                                        owner=["owner"],
-                                        place=["place"])
+                                        date=row["date"],
+                                        owner=row["owner"],
+                                        place=row["place"])
 
             # Query for person
             df_people = metadata_handler.getById(id)
@@ -1005,10 +1005,9 @@ class BasicMashup:
         for metadata_handler in self.metadataQuery:
             df_CHObjects = metadata_handler.getAllCulturalHeritageObjects()
 
-            df_CHObjects = df_CHObjects.groupby(["id", "objectName"]).agg({
+            df_CHObjects = df_CHObjects.groupby(["id", "objectName", "type", "date", "owner", "place"]).agg({
                 'authorName' : lambda x: list(x.unique()),
                 'authorId' : lambda  x: list(x.unique()),
-                **{col: 'first' for col in ["type", "date", "owner", "place"]}
             }).reset_index()
 
             for _, row in df_CHObjects.iterrows():
@@ -1044,10 +1043,9 @@ class BasicMashup:
         for metadata_handler in self.metadataQuery:
             df_CHObjects = metadata_handler.getCulturalHeritageObjectsAuthoredBy(personId)
 
-            df_CHObjects = df_CHObjects.groupby(["objectId", "title"]).agg({
+            df_CHObjects = df_CHObjects.groupby(["objectId", "title", "type", "date", "owner", "place"]).agg({
                 'authorName' : lambda x: list(x),
                 'authorId' : lambda  x: list(x),
-                **{col: 'first' for col in ["type", "date", "owner", "place"]}
             }).reset_index()
 
             for _, row in df_CHObjects.iterrows():
