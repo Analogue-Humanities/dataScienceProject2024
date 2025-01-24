@@ -399,6 +399,74 @@ class MetadataUploadHandler(UploadHandler):
         except Exception as e:
             print(f"An unexpected error occurred: {e}")
             return False
+        
+# Read the jason file and push the data into relational database        
+class ProcessDataUploadHandler(UploadHandler):
+
+    def uploadToRelDb(self, data: DataFrame, name: str):
+        with connect(ProcessDataUploadHandler.getDbPathOrUrl(self)) as con:
+            return data.to_sql(name, con, if_exists='replace', index = False)
+
+    def pushDataToDb(self, path: str) -> bool:
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = load(f)
+
+            activity_mapping = {
+                "acquisition": [],
+                "processing": [],
+                "modelling": [],
+                "optimising": [],
+                "exporting": []
+            }
+
+            for obj in data:
+                object_id = obj["object id"]
+
+                for activity_type in activity_mapping:
+                    if activity_type in obj:
+                        activity_data = obj[activity_type]
+
+                        # Create a unique identifier for each activity
+                        activity_id = f"{object_id}_{activity_type}"
+                        new_activity = {
+                            "activity_id": activity_id,
+                            "type": activity_type,
+                            "object_id": object_id,
+                            "responsible_institute": activity_data.get("responsible institute", ""),
+                            "responsible_person": activity_data.get("responsible person", ""),
+                            "start_date": activity_data.get("start date", ""),
+                            "end_date": activity_data.get("end date", ""),
+                            "tool": "; ".join(activity_data.get("tool", ""))
+                        }
+
+                        # Add the technique column in case the data is about acquisition
+                        if activity_type == "acquisition":
+                            new_activity["technique"] = activity_data.get("technique", "")
+
+                        activity_mapping[activity_type].append(new_activity)
+
+
+            # Create Dataframe for each activity + tools
+            df_acquisition = DataFrame(activity_mapping["acquisition"])
+            df_processing = DataFrame(activity_mapping["processing"])
+            df_modelling = DataFrame(activity_mapping["modelling"])
+            df_optimising = DataFrame(activity_mapping["optimising"])
+            df_exporting = DataFrame(activity_mapping["exporting"])
+
+            # Uploading the dataframes to relational database.
+            ProcessDataUploadHandler.uploadToRelDb(self, df_acquisition,'Acquisition')
+            ProcessDataUploadHandler.uploadToRelDb(self, df_processing, 'Processing')
+            ProcessDataUploadHandler.uploadToRelDb(self, df_modelling, 'Modelling')
+            ProcessDataUploadHandler.uploadToRelDb(self, df_optimising, 'Optimising')
+            ProcessDataUploadHandler.uploadToRelDb(self, df_exporting, 'Exporting')
+
+            return True
+
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
+            return False
+
 
 class QueryHandler(Handler):
 
