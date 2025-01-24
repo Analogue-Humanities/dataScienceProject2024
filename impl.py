@@ -173,7 +173,7 @@ class Handler:
 class UploadHandler(Handler):
 
     def pushDataToDb(self, path: str) -> bool:
-        # This is an abstract method
+        # An abstract method
         raise NotImplementedError("Subclasses must implement pushDataToDb")
 
 class MetadataUploadHandler(UploadHandler):
