@@ -2,9 +2,9 @@ from impl import ProcessDataQueryHandler, MetadataQueryHandler, AdvancedMashup, 
 # Once all the classes are imported, first create the relational
 # database using the related source data
 rel_path = "relational.db"
-#process = ProcessDataUploadHandler()
-#process.setDbPathOrUrl(rel_path)
-#process.pushDataToDb("data/process.json")
+process = ProcessDataUploadHandler()
+process.setDbPathOrUrl(rel_path)
+process.pushDataToDb("data/process.json")
 # Please remember that one could, in principle, push one or more files
 # calling the method one or more times (even calling the method twice
 # specifying the same file!)
@@ -12,9 +12,9 @@ rel_path = "relational.db"
 # Then, create the graph database (remember first to run the
 # Blazegraph instance) using the related source data
 grp_endpoint = "http://127.0.0.1:9999/blazegraph/sparql"
-#metadata = MetadataUploadHandler()
-#metadata.setDbPathOrUrl(grp_endpoint)
-#metadata.pushDataToDb("data/meta.csv")
+metadata = MetadataUploadHandler()
+metadata.setDbPathOrUrl(grp_endpoint)
+metadata.pushDataToDb("data/meta.csv")
 # Please remember that one could, in principle, push one or more files
 # calling the method one or more times (even calling the method twice
 # specifying the same file!)

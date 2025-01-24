@@ -158,8 +158,7 @@ class Exporting(Activity):
     def __repr__(self):
         return f"Exporting[RefersTo Object:**'{self._cultural_heritage_object}'**]"
 
-# Defining operational classes
-# First the Handlers
+# Define the handlers for reading the input data, cleaning it and upload them to database
 class Handler:
     def __init__(self, dbPathOrUrl=""):
         self.dbPathOrUrl = dbPathOrUrl # The initial value of the dbPathOrUrl
