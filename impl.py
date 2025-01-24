@@ -178,6 +178,23 @@ class UploadHandler(Handler):
 
 class MetadataUploadHandler(UploadHandler):
 
+    def uploadToGrDb(self, graph):
+
+        store = SPARQLUpdateStore()
+        endpoint = MetadataUploadHandler.getDbPathOrUrl(self)
+        store.open((endpoint, endpoint))
+
+        for triple in graph.triples((None, None, None)):
+            # Check if the triple already exists
+            query = f"ASK {{ {triple[0].n3()} {triple[1].n3()} {triple[2].n3()} }}"  # Construct the ASK query
+            result = store.query(query)
+
+            if not bool(result):  # If the triple doesn't exist, add it
+                store.add(triple)
+
+        store.close()
+        return store
+
     def makeClassName(self, name: str) ->str:
         newClassName = ""
         n = name.split()
@@ -241,6 +258,147 @@ class MetadataUploadHandler(UploadHandler):
         # Linnaeus VIAF which was not in the source file is added to the database
         Linnaeus_id = "VIAF:34594730"
         parenthesis_Pattern = re.compile(r"\(.*?\)")
+        
+        try:
+            metaData = read_csv(path,
+                                keep_default_na = False,
+                                dtype = "string")
+
+            for idx, row in metaData.iterrows():
+
+                # Some data cleansing work
+                if row["Author"] == "":
+                    in_row_author = re.search(r'\((.*?),', row["Title"])
+                    if in_row_author and in_row_author.group(1) == "Linnaeus":
+                        metaData.loc[idx, "Author"] = in_row_author.group(1) + f" ({Linnaeus_id})"
+
+                if row["Date"] == "":
+                    in_row_date = re.search(r'\d+', row["Title"])
+                    if in_row_date:
+                        metaData.loc[idx, "Date"] = in_row_date.group(0)
+
+                if parenthesis_Pattern.search(row["Title"]):
+                    metaData.loc[idx, "Title"] = parenthesis_Pattern.sub("", row["Title"]).strip()
+
+                # Updating the dataframe with the cleansed data
+                row["Author"] = metaData.loc[idx, "Author"]
+                row["Date"] = metaData.loc[idx, "Date"]
+                row["Title"] = metaData.loc[idx, "Title"].strip()
+
+                objTitle = row["Title"].replace(" ","_")
+                subject = URIRef(base_url+"/cHObject/"+row["Id"]+"_"+objTitle)
+
+                newType = MetadataUploadHandler.makeClassName(self, row['Type'])
+                # Add the triples of subject and the type to the Graph
+                myGraph.add((subject, RDF.type, URIRef(type_classes[newType])))
+
+                # Adding the literal names of types as they are in the database
+                if (URIRef(type_classes[newType]), name, Literal(newType)) not in myGraph:
+                    myGraph.add((URIRef(type_classes[newType]), name, Literal(newType)))
+
+                # Add th triples of subject and id to the Graph
+                myGraph.add((subject, id, Literal(row['Id'])))
+
+                # Add the triples of subject and title to the Graph
+                myGraph.add((subject, title, Literal(row['Title'])))
+
+                # Add date triples
+                myGraph.add((subject, date, Literal(row['Date'])))
+
+                # Produce the RDF of the owner information
+                myGraph.add((subject, owner, URIRef(owners[row['Owner']])))
+
+                # Produce and add the RDF for the place information
+                myGraph.add((subject, place, URIRef(places[row['Place']])))
+
+                all_authors = row['Author'].split("; ") # Separate the authors in case there are more than one author
+
+                for auth in all_authors:
+
+                    # Extract author's name from the string and check if the authority is VIAF or ULAN
+                    authorNameVi = re.search(  r"^[^()]*?(?= \(VIAF)", auth)
+                    authorNameUl = re.search(  r"^[^()]*?(?= \(ULAN)", auth)
+
+                    if authorNameVi:
+                        authorName = authorNameVi.group()
+                        viafId = ''.join(filter(lambda i: i.isdigit(), auth))
+                        authorId = URIRef("https://viaf.org/viaf/" + viafId)
+
+                        myGraph.add((subject, author, authorId))
+
+                        if (authorId, id, Literal('VIAF:'+viafId)) not in myGraph:
+                            myGraph.add((authorId, id, Literal('VIAF:'+viafId)))
+
+                        if (authorId, name, Literal(authorName)) not in myGraph:
+                            myGraph.add((authorId, name, Literal(authorName)))
+
+                        if (authorId, RDF.type, URIRef(person)) not in myGraph:
+                            myGraph.add((authorId, RDF.type, URIRef(person)))
+
+                    elif authorNameUl:
+                        authorName = authorNameUl.group()
+                        ulanId = ''.join(filter(lambda i: i.isdigit(), auth))
+                        authorId = URIRef("http://vocab.getty.edu/page/ulan/" + ulanId)
+
+                        myGraph.add((subject, author, authorId))
+
+                        if (authorId, id, Literal('ULAN:'+ulanId)) not in myGraph:
+                            myGraph.add((authorId, id, Literal('ULAN:'+ulanId)))
+
+                        if (authorId, name, Literal(authorName)) not in myGraph:
+                            myGraph.add((authorId, name, Literal(authorName)))
+
+                        if (authorId, RDF.type, URIRef(person)) not in myGraph:
+                            myGraph.add((authorId, RDF.type, URIRef(person)))
+
+                    else:
+                        myGraph.add((subject, author, URIRef(unknown))) # In case there were no value for author
+
+            myGraph.add((URIRef(unknown), name, Literal("Unknown"))) # Add name and id of the unknown to be consistent
+            myGraph.add((URIRef(unknown), id, Literal("Unknown")))
+
+            # Produce triple based on owners names and uris
+            for k, v in owners.items():
+                myGraph.add((URIRef(v), name, Literal(k)))
+                ownerId = re.search(r"(Q\d+)", v)
+
+                if ownerId:
+                    ownerId = ownerId.group()
+                    myGraph.add((URIRef(v), id, Literal(ownerId)))
+
+            myGraph.add((URIRef(owners['BUB']), RDF.type, URIRef(library)))
+            myGraph.add((URIRef(owners['Sistema Museale di Ateneo di Bologna']), RDF.type, URIRef(museum)))
+            myGraph.add((URIRef(
+                owners['Biblioteca del Dipartimento di Scienze Biologiche, Geologiche e Ambientali, Bologna']), RDF.type,
+                         URIRef(library)))
+            myGraph.add((URIRef(
+                owners['Biblioteca del Dipartimento di Scienze Biologiche, Geologiche e Ambientali, Bologna']), RDF.type,
+                         URIRef(library)))
+            myGraph.add((URIRef(owners['Accademia Carrara']), RDF.type, URIRef(museum)))
+            myGraph.add((URIRef(owners['Orto Botanico ed Herbarium di Bologna']), RDF.type, URIRef(museum)))
+            myGraph.add((URIRef(owners['Museo di Palazzo Poggi']), RDF.type, URIRef(museum)))
+            myGraph.add((URIRef(owners['Museo di Storia Naturale di Verona']), RDF.type, URIRef(museum)))
+
+            #produce triple on place names and uris
+            for k, v in places.items():
+                myGraph.add((URIRef(v), name, Literal(k)))
+                placeId = re.search(r"(Q\d+)", v)
+
+                if placeId:
+                    placeId = placeId.group()
+                    myGraph.add((URIRef(v), id, Literal(placeId)))
+
+            myGraph.add((URIRef(places['Bologna']), RDF.type, URIRef(city)))
+            myGraph.add((URIRef(places['Bergamo']), RDF.type, URIRef(city)))
+            myGraph.add((URIRef(places['Verona']), RDF.type, URIRef(city)))
+            myGraph.add((URIRef(places["Ozzano dell'Emilia"]), RDF.type, URIRef(city)))
+
+            MetadataUploadHandler.uploadToGrDb(self, myGraph)
+            return True
+
+        except Exception as e:
+            print(f"An unexpected error occurred: {e}")
+            return False
 
 class QueryHandler(Handler):
 
