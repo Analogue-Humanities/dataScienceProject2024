@@ -158,7 +158,8 @@ class Exporting(Activity):
     def __repr__(self):
         return f"Exporting[RefersTo Object:**'{self._cultural_heritage_object}'**]"
 
-# Define the handlers for reading the input data, cleaning it and upload them to database
+# Defining operational classes
+# First the Handlers
 class Handler:
     def __init__(self, dbPathOrUrl=""):
         self.dbPathOrUrl = dbPathOrUrl # The initial value of the dbPathOrUrl
@@ -173,7 +174,7 @@ class Handler:
 class UploadHandler(Handler):
 
     def pushDataToDb(self, path: str) -> bool:
-        # An abstract method
+        # This is an abstract method
         raise NotImplementedError("Subclasses must implement pushDataToDb")
 
 class MetadataUploadHandler(UploadHandler):
@@ -195,52 +196,12 @@ class MetadataUploadHandler(UploadHandler):
         store.close()
         return store
 
-    def makeClassName(self, name: str) ->str:
-        newClassName = ""
-        n = name.split()
-        for i in n:
-            newClassName += i.capitalize()
-
-        return newClassName
-    
-    
     def pushDataToDb(self, path: str) -> bool:
 
         myGraph = Graph()
 
-        # Classes of Cultural Heritage Objects
-        type_classes = {'NauticalChart' : "https://www.wikidata.org/wiki/Q728502",
-        'PrintedVolume' : "https://schema.org/Book",
-        'Herbarium' : "https://www.wikidata.org/wiki/Q181916",
-        'PrintedMaterial' : "https://www.wikidata.org/wiki/Q1261026",
-        'Specimen' : "https://www.wikidata.org/wiki/Q85869058",
-        'Painting' : "https://schema.org/Painting",
-        'Map' : "https://schema.org/Map",
-        'ManuscriptVolume' : "https://schema.org/ArchiveComponent",
-        'ManuscriptPlate' : "https://schema.org/Manuscript",
-        'Model' : "https://www.wikidata.org/wiki/Q1979154"}
-
-        owners = {'BUB' : "https://www.wikidata.org/wiki/Q2901539", # Biblioteca Universitaria di Bologna
-        'Sistema Museale di Ateneo di Bologna' : "https://www.wikidata.org/wiki/Q3485343",
-        'Biblioteca del Dipartimento di Scienze Biologiche, Geologiche e Ambientali, Bologna' : \
-                        "https://www.wikidata.org/wiki/Q112169891",
-        'Accademia Carrara' : "https://www.wikidata.org/wiki/Q338367",
-        'Orto Botanico ed Herbarium di Bologna' : "https://www.wikidata.org/wiki/Q3133893",
-        'Museo di Palazzo Poggi' : "https://www.wikidata.org/wiki/Q3868219",
-        'Museo di Storia Naturale di Verona' : "https://www.wikidata.org/wiki/Q3867829"}
-
-        places = {
-            'Bologna' : "https://www.wikidata.org/wiki/Q1891",
-            'Bergamo' : "https://www.wikidata.org/wiki/Q628",
-            'Verona' : "https://www.wikidata.org/wiki/Q2028",
-            "Ozzano dell'Emilia" : "https://www.wikidata.org/wiki/Q29080"
-        }
-
         base_url = "https://github.com/Analogue-Humanities"
 
-        library = "https://schema.org/Library"
-        museum = "https://schema.org/Museum"
-        city = "https://schema.org/City"
         unknown = base_url+"/Unknown"
         person = "https://schema.org/Person"
 
@@ -249,16 +210,14 @@ class MetadataUploadHandler(UploadHandler):
         title = URIRef("https://schema.org/name")
         date = URIRef("https://schema.org/dateCreated")
         name = URIRef("https://schema.org/name")
-
-        # Relation
-        author = URIRef("https://schema.org/author")
         owner = URIRef("https://schema.org/owns")
         place = URIRef("https://schema.org/location")
 
-        # Linnaeus VIAF which was not in the source file is added to the database
-        Linnaeus_id = "VIAF:34594730"
+        # Relation
+        author = URIRef("https://schema.org/author")
+
         parenthesis_Pattern = re.compile(r"\(.*?\)")
-        
+
         try:
             metaData = read_csv(path,
                                 keep_default_na = False,
@@ -269,11 +228,11 @@ class MetadataUploadHandler(UploadHandler):
                 # Some data cleansing work
                 if row["Author"] == "":
                     in_row_author = re.search(r'\((.*?),', row["Title"])
-                    if in_row_author and in_row_author.group(1) == "Linnaeus":
-                        metaData.loc[idx, "Author"] = in_row_author.group(1) + f" ({Linnaeus_id})"
+                    if in_row_author:
+                        metaData.loc[idx, "Author"] = in_row_author.group(1) + " (Unknown_id)"
 
                 if row["Date"] == "":
-                    in_row_date = re.search(r'\d+', row["Title"])
+                    in_row_date = re.search(r'\d{4}', row["Title"])
                     if in_row_date:
                         metaData.loc[idx, "Date"] = in_row_date.group(0)
 
@@ -288,13 +247,16 @@ class MetadataUploadHandler(UploadHandler):
                 objTitle = row["Title"].replace(" ","_")
                 subject = URIRef(base_url+"/cHObject/"+row["Id"]+"_"+objTitle)
 
-                newType = MetadataUploadHandler.makeClassName(self, row['Type'])
+                editedType = MetadataUploadHandler.makeClassName(self, row['Type'])
+                typeURI = base_url+"/types/"+editedType
+
+
                 # Add the triples of subject and the type to the Graph
-                myGraph.add((subject, RDF.type, URIRef(type_classes[newType])))
+                myGraph.add((subject, RDF.type, URIRef(typeURI)))
 
                 # Adding the literal names of types as they are in the database
-                if (URIRef(type_classes[newType]), name, Literal(newType)) not in myGraph:
-                    myGraph.add((URIRef(type_classes[newType]), name, Literal(newType)))
+                if (URIRef(typeURI), name, Literal(editedType)) not in myGraph:
+                    myGraph.add((URIRef(typeURI), name, Literal(editedType)))
 
                 # Add th triples of subject and id to the Graph
                 myGraph.add((subject, id, Literal(row['Id'])))
@@ -306,92 +268,30 @@ class MetadataUploadHandler(UploadHandler):
                 myGraph.add((subject, date, Literal(row['Date'])))
 
                 # Produce the RDF of the owner information
-                myGraph.add((subject, owner, URIRef(owners[row['Owner']])))
+                myGraph.add((subject, owner, Literal([row['Owner']])))
 
                 # Produce and add the RDF for the place information
-                myGraph.add((subject, place, URIRef(places[row['Place']])))
+                myGraph.add((subject, place, Literal([row['Place']])))
 
                 all_authors = row['Author'].split("; ") # Separate the authors in case there are more than one author
 
                 for auth in all_authors:
 
-                    # Extract author's name from the string and check if the authority is VIAF or ULAN
-                    authorNameVi = re.search(  r"^[^()]*?(?= \(VIAF)", auth)
-                    authorNameUl = re.search(  r"^[^()]*?(?= \(ULAN)", auth)
+                    theAuthor = self.handleAuthor(auth)
 
-                    if authorNameVi:
-                        authorName = authorNameVi.group()
-                        viafId = ''.join(filter(lambda i: i.isdigit(), auth))
-                        authorId = URIRef("https://viaf.org/viaf/" + viafId)
+                    authorURI = URIRef(base_url + "/authors/" + theAuthor[1])
 
-                        myGraph.add((subject, author, authorId))
+                    myGraph.add((subject, author, authorURI))
 
-                        if (authorId, id, Literal('VIAF:'+viafId)) not in myGraph:
-                            myGraph.add((authorId, id, Literal('VIAF:'+viafId)))
+                    if (authorURI, id, Literal(theAuthor[1])) not in myGraph:
+                        myGraph.add((authorURI, id, Literal(theAuthor[1])))
 
-                        if (authorId, name, Literal(authorName)) not in myGraph:
-                            myGraph.add((authorId, name, Literal(authorName)))
+                    if (authorURI, name, Literal( theAuthor[0])) not in myGraph:
+                        myGraph.add((authorURI, name, Literal( theAuthor[0])))
 
-                        if (authorId, RDF.type, URIRef(person)) not in myGraph:
-                            myGraph.add((authorId, RDF.type, URIRef(person)))
+                    if (authorURI, RDF.type, URIRef(person)) not in myGraph:
+                        myGraph.add((authorURI, RDF.type, URIRef(person)))
 
-                    elif authorNameUl:
-                        authorName = authorNameUl.group()
-                        ulanId = ''.join(filter(lambda i: i.isdigit(), auth))
-                        authorId = URIRef("http://vocab.getty.edu/page/ulan/" + ulanId)
-
-                        myGraph.add((subject, author, authorId))
-
-                        if (authorId, id, Literal('ULAN:'+ulanId)) not in myGraph:
-                            myGraph.add((authorId, id, Literal('ULAN:'+ulanId)))
-
-                        if (authorId, name, Literal(authorName)) not in myGraph:
-                            myGraph.add((authorId, name, Literal(authorName)))
-
-                        if (authorId, RDF.type, URIRef(person)) not in myGraph:
-                            myGraph.add((authorId, RDF.type, URIRef(person)))
-
-                    else:
-                        myGraph.add((subject, author, URIRef(unknown))) # In case there were no value for author
-
-            myGraph.add((URIRef(unknown), name, Literal("Unknown"))) # Add name and id of the unknown to be consistent
-            myGraph.add((URIRef(unknown), id, Literal("Unknown")))
-
-            # Produce triple based on owners names and uris
-            for k, v in owners.items():
-                myGraph.add((URIRef(v), name, Literal(k)))
-                ownerId = re.search(r"(Q\d+)", v)
-
-                if ownerId:
-                    ownerId = ownerId.group()
-                    myGraph.add((URIRef(v), id, Literal(ownerId)))
-
-            myGraph.add((URIRef(owners['BUB']), RDF.type, URIRef(library)))
-            myGraph.add((URIRef(owners['Sistema Museale di Ateneo di Bologna']), RDF.type, URIRef(museum)))
-            myGraph.add((URIRef(
-                owners['Biblioteca del Dipartimento di Scienze Biologiche, Geologiche e Ambientali, Bologna']), RDF.type,
-                         URIRef(library)))
-            myGraph.add((URIRef(
-                owners['Biblioteca del Dipartimento di Scienze Biologiche, Geologiche e Ambientali, Bologna']), RDF.type,
-                         URIRef(library)))
-            myGraph.add((URIRef(owners['Accademia Carrara']), RDF.type, URIRef(museum)))
-            myGraph.add((URIRef(owners['Orto Botanico ed Herbarium di Bologna']), RDF.type, URIRef(museum)))
-            myGraph.add((URIRef(owners['Museo di Palazzo Poggi']), RDF.type, URIRef(museum)))
-            myGraph.add((URIRef(owners['Museo di Storia Naturale di Verona']), RDF.type, URIRef(museum)))
-
-            #produce triple on place names and uris
-            for k, v in places.items():
-                myGraph.add((URIRef(v), name, Literal(k)))
-                placeId = re.search(r"(Q\d+)", v)
-
-                if placeId:
-                    placeId = placeId.group()
-                    myGraph.add((URIRef(v), id, Literal(placeId)))
-
-            myGraph.add((URIRef(places['Bologna']), RDF.type, URIRef(city)))
-            myGraph.add((URIRef(places['Bergamo']), RDF.type, URIRef(city)))
-            myGraph.add((URIRef(places['Verona']), RDF.type, URIRef(city)))
-            myGraph.add((URIRef(places["Ozzano dell'Emilia"]), RDF.type, URIRef(city)))
 
             MetadataUploadHandler.uploadToGrDb(self, myGraph)
             return True
@@ -399,8 +299,25 @@ class MetadataUploadHandler(UploadHandler):
         except Exception as e:
             print(f"An unexpected error occurred: {e}")
             return False
-        
-# Read the jason file and push the data into relational database        
+
+    def makeClassName(self, name: str) ->str:
+        newClassName = ""
+        n = name.split()
+        for i in n:
+            newClassName += i.capitalize()
+
+        return newClassName
+
+    def handleAuthor(self, author: str):
+            match = re.match(r'([^()]+)\s*(\(([^)]+)\))?', author)
+            if match:
+                authorName = match.group(1).strip()  # Extract the Name part
+                authorId = match.group(2)[1:-1].strip() if match.group(2) else "UnknownId"  # Extract ID or return default
+                return authorName, authorId
+            if author == "":
+                author = "Unknown"
+            return author, "UnknownId"
+
 class ProcessDataUploadHandler(UploadHandler):
 
     def uploadToRelDb(self, data: DataFrame, name: str):
@@ -467,7 +384,6 @@ class ProcessDataUploadHandler(UploadHandler):
             print(f"An unexpected error occurred: {e}")
             return False
 
-
 class QueryHandler(Handler):
 
     def getById(self, id: str) -> DataFrame:
@@ -487,10 +403,9 @@ class QueryHandler(Handler):
                       ?author schema:name ?authorName.
                       ?author schema:identifier ?authorId.
                       ?entityId schema:dateCreated ?date.
-                      ?entityId schema:location ?placeId.
-                      ?placeId schema:name ?place.
-                      ?entityId schema:owns ?ownerId.
-                      ?ownerId schema:name ?owner.}}
+                      ?entityId schema:location ?place.
+                      ?entityId schema:owns ?owner.
+                    }}
 
         }}
         """
@@ -548,10 +463,8 @@ class MetadataQueryHandler(QueryHandler):
                       ?author schema:name ?authorName.
                       ?author schema:identifier ?authorId.
                       ?s schema:dateCreated ?date.
-                      ?s schema:owns ?ownerId.
-                      ?ownerId schema:name ?owner.
-                      ?s schema:location ?placeId.
-                      ?placeId schema:name ?place.
+                      ?s schema:owns ?owner.
+                      ?s schema:location ?place.
                     }
 
                        """
@@ -592,10 +505,8 @@ class MetadataQueryHandler(QueryHandler):
                   ?author schema:name ?authorName.
                   ?author schema:identifier ?authorId.
                   ?object schema:dateCreated ?date.
-                  ?object schema:owns ?ownerId.
-                  ?ownerId schema:name ?owner.
-                  ?object schema:location ?placeId.
-                  ?placeId schema:name ?place.
+                  ?object schema:owns ?owner.
+                  ?object schema:location ?place.
                   }}
                '''
 
@@ -788,31 +699,31 @@ class ProcessDataQueryHandler(QueryHandler):
                                 SELECT activity_id, type, object_id, responsible_person, responsible_institute,
                                 start_date, end_date, technique, tool 
                                 FROM Acquisition
-                                WHERE start_date > date('{date}')
+                                WHERE start_date >= date('{date}')
 
                                 UNION
                                 SELECT activity_id, type, object_id, responsible_person, responsible_institute,
                                 start_date, end_date, Null As technique, tool
                                 FROM Exporting
-                                WHERE start_date > date('{date}')
+                                WHERE start_date >= date('{date}')
 
                                 UNION
                                 SELECT activity_id, type, object_id, responsible_person, responsible_institute,
                                 start_date, end_date, Null As technique, tool
                                 FROM Modelling
-                                WHERE start_date > date('{date}')
+                                WHERE start_date >= date('{date}')
 
                                 UNION
                                 SELECT activity_id, type, object_id, responsible_person, responsible_institute,
                                 start_date, end_date, Null As technique, tool
                                 FROM Optimising
-                                WHERE start_date > date('{date}')
+                                WHERE start_date >= date('{date}')
 
                                 UNION
                                 SELECT activity_id, type, object_id, responsible_person, responsible_institute,
                                 start_date, end_date, Null As technique, tool
                                 FROM Processing
-                                WHERE start_date > date('{date}');
+                                WHERE start_date >= date('{date}');
                         """
             df_activityBySD = read_sql(query, con)
 
@@ -833,31 +744,31 @@ class ProcessDataQueryHandler(QueryHandler):
                                 SELECT activity_id, type, object_id, responsible_person, responsible_institute,
                                 start_date, end_date, technique, tool 
                                 FROM Acquisition
-                                WHERE end_date < date('{date}')
+                                WHERE end_date <= date('{date}')
 
                                 UNION
                                 SELECT activity_id, type, object_id, responsible_person, responsible_institute,
                                 start_date, end_date, Null As technique, tool
                                 FROM Exporting
-                                WHERE end_date < date('{date}')
+                                WHERE end_date <= date('{date}')
 
                                 UNION
                                 SELECT activity_id, type, object_id, responsible_person, responsible_institute,
                                 start_date, end_date, Null As technique, tool
                                 FROM Modelling
-                                WHERE end_date < date('{date}')
+                                WHERE end_date <= date('{date}')
 
                                 UNION
                                 SELECT activity_id, type, object_id, responsible_person, responsible_institute,
                                 start_date, end_date, Null As technique, tool
                                 FROM Optimising
-                                WHERE end_date < date('{date}')
+                                WHERE end_date <= date('{date}')
 
                                 UNION
                                 SELECT activity_id, type, object_id, responsible_person, responsible_institute,
                                 start_date, end_date, Null As technique, tool
                                 FROM Processing
-                                WHERE end_date < date('{date}');
+                                WHERE end_date <= date('{date}');
                         """
             df_activityByED = read_sql(query, con)
 
