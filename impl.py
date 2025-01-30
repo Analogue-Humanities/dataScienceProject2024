@@ -229,7 +229,7 @@ class MetadataUploadHandler(UploadHandler):
                 if row["Author"] == "":
                     in_row_author = re.search(r'\((.*?),', row["Title"])
                     if in_row_author:
-                        metaData.loc[idx, "Author"] = in_row_author.group(1) + " (Unknown_id)"
+                        metaData.loc[idx, "Author"] = in_row_author.group(1)
 
                 if row["Date"] == "":
                     in_row_date = re.search(r'\d{4}', row["Title"])
@@ -243,6 +243,7 @@ class MetadataUploadHandler(UploadHandler):
                 row["Author"] = metaData.loc[idx, "Author"]
                 row["Date"] = metaData.loc[idx, "Date"]
                 row["Title"] = metaData.loc[idx, "Title"].strip()
+
 
                 objTitle = row["Title"].replace(" ","_")
                 subject = URIRef(base_url+"/cHObject/"+row["Id"]+"_"+objTitle)
@@ -268,18 +269,18 @@ class MetadataUploadHandler(UploadHandler):
                 myGraph.add((subject, date, Literal(row['Date'])))
 
                 # Produce the RDF of the owner information
-                myGraph.add((subject, owner, Literal([row['Owner']])))
+                myGraph.add((subject, owner, Literal(row['Owner'])))
 
                 # Produce and add the RDF for the place information
-                myGraph.add((subject, place, Literal([row['Place']])))
+                myGraph.add((subject, place, Literal(row['Place'])))
 
                 all_authors = row['Author'].split("; ") # Separate the authors in case there are more than one author
+                print(all_authors)
 
                 for auth in all_authors:
-
                     theAuthor = self.handleAuthor(auth)
-
-                    authorURI = URIRef(base_url + "/authors/" + theAuthor[1])
+                    print(theAuthor)
+                    authorURI = URIRef(base_url + "/authors/" + theAuthor[1].replace(":", "_")+ "_"+ theAuthor[0].replace(" ", "_"))
 
                     myGraph.add((subject, author, authorURI))
 
@@ -292,7 +293,7 @@ class MetadataUploadHandler(UploadHandler):
                     if (authorURI, RDF.type, URIRef(person)) not in myGraph:
                         myGraph.add((authorURI, RDF.type, URIRef(person)))
 
-
+            print(metaData)
             MetadataUploadHandler.uploadToGrDb(self, myGraph)
             return True
 
@@ -314,9 +315,8 @@ class MetadataUploadHandler(UploadHandler):
                 authorName = match.group(1).strip()  # Extract the Name part
                 authorId = match.group(2)[1:-1].strip() if match.group(2) else "UnknownId"  # Extract ID or return default
                 return authorName, authorId
-            if author == "":
-                author = "Unknown"
-            return author, "UnknownId"
+
+            return "Unknown", "UnknownId"
 
 class ProcessDataUploadHandler(UploadHandler):
 
@@ -1234,7 +1234,7 @@ class AdvancedMashup(BasicMashup):
                                                # Filter the Acquisition activity
             if hasattr(activity, "technique"): # Because only the acquisition activity has the attribute technique
                     # Check if the start and end date of the acquisition is between the given dates
-                if activity.getStartDate() > start and activity.getEndDate() < end:
+                if activity.getStartDate() >= start and activity.getEndDate() <= end:
                     CHObject = activity.refersTo()
                     ObjectId = CHObject.getId()
 
