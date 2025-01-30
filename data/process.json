@@ -1713,5 +1713,56 @@
             "start date": "2023-08-21",
             "end date": "2023-08-21"
         }
+    },
+    {
+    "object id": "1",
+    "acquisition": {
+        "responsible institute": "Council",
+        "responsible person": "Armin Behnam",
+        "technique": "Photogrammetry",
+        "tool": [
+            "Nikon D7200 Nikor 50mm"
+        ],
+        "start date": "2024-05-08",
+        "end date": "2024-05-08"
+    },
+    "processing": {
+        "responsible institute": "Council",
+        "responsible person": "Mo khoubdeh",
+        "tool": [
+            "3DF Zephyr"
+        ],
+        "start date": "2024-05-08",
+        "end date": "2024-05-09"
+    },
+    "modelling": {
+        "responsible institute": "Philology",
+        "responsible person": "Armin Behnam",
+        "tool": [
+            "Blender"
+        ],
+        "start date": "2023-06-22",
+        "end date": "2023-06-24"
+    },
+    "optimising": {
+        "responsible institute": "Philology",
+        "responsible person": "Grace Hopper",
+        "tool": [
+            "Gimp",
+            "Blender",
+            "Instant Meshes"
+        ],
+        "start date": "2024-05-07",
+        "end date": "2024-06-07"
+    },
+    "exporting": {
+        "responsible institute": "Philology",
+        "responsible person": "Grace Hopper",
+        "tool": [
+            "Blender"
+        ],
+        "start date": "2024-06-07",
+        "end date": "2024-06-07"
     }
+}
 ]

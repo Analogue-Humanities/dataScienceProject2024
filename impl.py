@@ -94,7 +94,7 @@ class Person(IdentifiableEntity):
         return self.name
 
 class Activity(object):
-    def __init__(self, institute, person, tool, start, end, cultural_heritage_object):
+    def __init__(self, institute, person, tool, start, end, cultural_heritage_object, activity_id):
         self.institute = institute
         self.person = person
         self.tool = set()
@@ -103,6 +103,7 @@ class Activity(object):
         self.start = start
         self.end = end
         self._cultural_heritage_object = cultural_heritage_object
+        self._activity_id = activity_id
 
     def getResponsibleInstitute(self) -> str:
         return self.institute
@@ -132,31 +133,31 @@ class Activity(object):
         return self._cultural_heritage_object
 
 class Acquisition(Activity):
-    def __init__(self,technique, institute, person, tool, start, end, cultural_heritage_object):
-        super().__init__(institute, person, tool, start, end, cultural_heritage_object)
+    def __init__(self,technique, institute, person, tool, start, end, cultural_heritage_object, activity_id):
+        super().__init__(institute, person, tool, start, end, cultural_heritage_object, activity_id)
         self.technique = technique
 
     def __repr__(self):
-        return f"Acquisition[RefersTo Object:**'{self._cultural_heritage_object}'**]"
+        return f"The Activity Id is {self._activity_id}"
 
     def getTechnique(self) -> str:
         return self.technique
 
 class Processing(Activity):
     def __repr__(self):
-        return f"Processing[RefersTo Object:**'{self._cultural_heritage_object}'**]"
+        return f"The Activity Id is {self._activity_id}"
 
 class Modelling(Activity):
     def __repr__(self):
-        return f"Modelling[RefersTo Object:**'{self._cultural_heritage_object}'**]"
+        return f"The Activity Id is {self._activity_id}"
 
 class Optimising(Activity):
     def __repr__(self):
-        return f"Optimising[RefersTo Object:**'{self._cultural_heritage_object}'**]"
+        return f"The Activity Id is {self._activity_id}"
 
 class Exporting(Activity):
     def __repr__(self):
-        return f"Exporting[RefersTo Object:**'{self._cultural_heritage_object}'**]"
+        return f"The Activity Id is {self._activity_id}"
 
 # Defining operational classes
 # First the Handlers
@@ -275,11 +276,11 @@ class MetadataUploadHandler(UploadHandler):
                 myGraph.add((subject, place, Literal(row['Place'])))
 
                 all_authors = row['Author'].split("; ") # Separate the authors in case there are more than one author
-                print(all_authors)
+
 
                 for auth in all_authors:
                     theAuthor = self.handleAuthor(auth)
-                    print(theAuthor)
+
                     authorURI = URIRef(base_url + "/authors/" + theAuthor[1].replace(":", "_")+ "_"+ theAuthor[0].replace(" ", "_"))
 
                     myGraph.add((subject, author, authorURI))
@@ -293,7 +294,6 @@ class MetadataUploadHandler(UploadHandler):
                     if (authorURI, RDF.type, URIRef(person)) not in myGraph:
                         myGraph.add((authorURI, RDF.type, URIRef(person)))
 
-            print(metaData)
             MetadataUploadHandler.uploadToGrDb(self, myGraph)
             return True
 
@@ -336,16 +336,17 @@ class ProcessDataUploadHandler(UploadHandler):
                 "optimising": [],
                 "exporting": []
             }
-
+            n = 0
             for obj in data:
                 object_id = obj["object id"]
+                n += 1
 
                 for activity_type in activity_mapping:
                     if activity_type in obj:
                         activity_data = obj[activity_type]
 
                         # Create a unique identifier for each activity
-                        activity_id = f"{object_id}_{activity_type}"
+                        activity_id = f"{activity_type}_{n}"
                         new_activity = {
                             "activity_id": activity_id,
                             "type": activity_type,
@@ -992,7 +993,8 @@ class BasicMashup:
                                                         tool = row["tool"].split("; "),
                                                         start = row["start_date"],
                                                         end = row["end_date"],
-                                                        cultural_heritage_object = self.getEntityById(row["object_id"])
+                                                        cultural_heritage_object = self.getEntityById(row["object_id"]),
+                                                        activity_id = row["activity_id"]
                                                         ))
 
                 elif activity_class:
@@ -1001,7 +1003,8 @@ class BasicMashup:
                                                         tool = row["tool"].split("; "),
                                                         start = row["start_date"],
                                                         end = row["end_date"],
-                                                        cultural_heritage_object = self.getEntityById(row["object_id"])
+                                                        cultural_heritage_object = self.getEntityById(row["object_id"]),
+                                                        activity_id = row["activity_id"]
                                                         ))
 
         return allActivities
@@ -1022,7 +1025,8 @@ class BasicMashup:
                                                          tool = row["tool"].split("; "),
                                                          start = row["start_date"],
                                                          end = row["end_date"],
-                                                         cultural_heritage_object = self.getEntityById(row["object_id"])
+                                                         cultural_heritage_object = self.getEntityById(row["object_id"]),
+                                                         activity_id = row["activity_id"]
                                                          ))
                 elif activity_class:
                     activityByInst.append(activity_class(institute = row["responsible_institute"],
@@ -1030,7 +1034,8 @@ class BasicMashup:
                                                         tool = row["tool"].split("; "),
                                                         start = row["start_date"],
                                                         end = row["end_date"],
-                                                        cultural_heritage_object = self.getEntityById(row["object_id"])
+                                                        cultural_heritage_object = self.getEntityById(row["object_id"]),
+                                                        activity_id=row["activity_id"]
                                                         ))
 
         return activityByInst
@@ -1051,7 +1056,8 @@ class BasicMashup:
                                                          tool = row["tool"].split("; "),
                                                          start = row["start_date"],
                                                          end = row["end_date"],
-                                                         cultural_heritage_object = self.getEntityById(row["object_id"])
+                                                         cultural_heritage_object = self.getEntityById(row["object_id"]),
+                                                         activity_id = row["activity_id"]
                                                          ))
                 elif activity_class:
                     activityByPers.append(activity_class(institute = row["responsible_institute"],
@@ -1059,7 +1065,8 @@ class BasicMashup:
                                                         tool = row["tool"].split("; "),
                                                         start = row["start_date"],
                                                         end = row["end_date"],
-                                                        cultural_heritage_object = self.getEntityById(row["object_id"])
+                                                        cultural_heritage_object = self.getEntityById(row["object_id"]),
+                                                        activity_id = row["activity_id"]
                                                         ))
 
         return activityByPers
@@ -1080,7 +1087,9 @@ class BasicMashup:
                                                          tool = row["tool"].split("; "),
                                                          start = row["start_date"],
                                                          end = row["end_date"],
-                                                         cultural_heritage_object = self.getEntityById(row["object_id"])
+                                                         activity_id=row["activity_id"],
+                                                         cultural_heritage_object = self.getEntityById(row["object_id"]
+                                                         )
                                                          ))
                 elif activity_class:
                     activityUsingTool.append(activity_class(institute = row["responsible_institute"],
@@ -1088,7 +1097,8 @@ class BasicMashup:
                                                         tool = row["tool"].split("; "),
                                                         start = row["start_date"],
                                                         end = row["end_date"],
-                                                        cultural_heritage_object = self.getEntityById(row["object_id"])
+                                                        cultural_heritage_object = self.getEntityById(row["object_id"]),
+                                                        activity_id = row["activity_id"]
                                                         ))
 
         return activityUsingTool
@@ -1109,7 +1119,8 @@ class BasicMashup:
                                                          tool = row["tool"].split("; "),
                                                          start = row["start_date"],
                                                          end = row["end_date"],
-                                                         cultural_heritage_object = self.getEntityById(row["object_id"])
+                                                         cultural_heritage_object = self.getEntityById(row["object_id"]),
+                                                         activity_id = row["activity_id"]
                                                          ))
                 elif activity_class:
                     activityStartedAfter.append(activity_class(institute = row["responsible_institute"],
@@ -1117,7 +1128,8 @@ class BasicMashup:
                                                         tool = row["tool"].split("; "),
                                                         start = row["start_date"],
                                                         end = row["end_date"],
-                                                        cultural_heritage_object = self.getEntityById(row["object_id"])
+                                                        cultural_heritage_object = self.getEntityById(row["object_id"]),
+                                                        activity_id = row["activity_id"]
                                                         ))
         return activityStartedAfter
 
@@ -1137,15 +1149,17 @@ class BasicMashup:
                                                                tool = row["tool"].split("; "),
                                                                start = row["start_date"],
                                                                end = row["end_date"],
-                                                               cultural_heritage_object = self.getEntityById(row["object_id"])
-                                                               ))
+                                                               cultural_heritage_object = self.getEntityById(row["object_id"]),
+                                                               activity_id = row["activity_id"]
+                                                                ))
                 elif activity_class:
                     activityEndedBefore.append(activity_class(institute = row["responsible_institute"],
                                                                person = row["responsible_person"],
                                                                tool = row["tool"].split("; "),
                                                                start = row["start_date"],
                                                                end = row["end_date"],
-                                                               cultural_heritage_object = self.getEntityById(row["object_id"])
+                                                               cultural_heritage_object = self.getEntityById(row["object_id"]),
+                                                               activity_id = row["activity_id"]
                                                                ))
         return activityEndedBefore
 
@@ -1165,7 +1179,8 @@ class BasicMashup:
                                                                tool = row["tool"].split("; "),
                                                                start = row["start_date"],
                                                                end = row["end_date"],
-                                                               cultural_heritage_object = self.getEntityById(row["object_id"])
+                                                               cultural_heritage_object = self.getEntityById(row["object_id"]),
+                                                               activity_id = row["activity_id"]
                                                                ))
 
         return acquisitionByTech
