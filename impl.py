@@ -284,6 +284,8 @@ class MetadataUploadHandler(UploadHandler):
             # Add name for CH Object
             myGraph.add((typeChObj, name, Literal("CulturalHeritageObject")))
 
+            # Add person
+            myGraph.add((URIRef(person), name , Literal("person")))
             MetadataUploadHandler.uploadToGrDb(self, myGraph)
             return True
 
@@ -404,7 +406,6 @@ class QueryHandler(Handler):
         try:
             df_id = get(endpoint, query, True).astype(str)
             df_id.drop(df_id[df_id["type"] == "CulturalHeritageObject"].index, inplace = True)
-
         except:
             df_id = DataFrame()
 
@@ -1233,16 +1234,17 @@ class AdvancedMashup(BasicMashup):
         for activity in allActivities:
                                                # Filter the Acquisition activity
             if hasattr(activity, "technique"): # Because only the acquisition activity has the attribute technique
+
                     # Check if the start and end date of the acquisition is between the given dates
-                if activity.getStartDate() >= start and activity.getEndDate() <= end:
+                if activity.getStartDate() > start and activity.getEndDate() < end:
                     CHObject = activity.refersTo()
                     ObjectId = CHObject.getId()
 
                     author = self.getAuthorsOfCulturalHeritageObject(ObjectId)
+
                     if author and len(author)>0:
                         for i in author:
                             AuthorIds.add(i.getId())
-
 
         Authors = [self.getEntityById(i) for i in AuthorIds]
 
