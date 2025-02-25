@@ -19,7 +19,12 @@ class CulturalHeritageObject(IdentifiableEntity):
     def __init__(self, id, title, date, owner,  place, author):
         super().__init__(id)
         self.title = title
-        self.date = date
+
+        if date != "nan":
+            self.date = date
+        else:
+            self.date = None
+
         self.owner = owner
         self.place = place
         if author["authorName"][0] != "nan":
@@ -305,7 +310,7 @@ class MetadataUploadHandler(UploadHandler):
             match = re.match(r'([^()]+)\s*(\(([^)]+)\))?', author)
             if match:
                 authorName = match.group(1).strip()  # Extract the Name part
-                authorId = "No_id"
+                authorId = ""
                 if match.group(2):  # Extract ID
                     authorId = match.group(2)[1:-1].strip()
                 return authorName, authorId
@@ -919,9 +924,9 @@ class BasicMashup:
                                                      title = row["objectName"],
                                                      author = {"authorId": row["authorId"],
                                                              "authorName": row["authorName"]},
-                                                     date = ["date"],
-                                                     owner = ["owner"],
-                                                     place = ["place"]))
+                                                     date = row["date"],
+                                                     owner = row["owner"],
+                                                     place = row["place"]))
 
         return allCHObjects
 
@@ -1007,7 +1012,7 @@ class BasicMashup:
                 if activity_class and activity_class == Acquisition:
                     activityByInst.append(activity_class(technique = row["technique"],
                                                          institute = row["responsible_institute"],
-                                                         person = ["responsible_person"],
+                                                         person = row["responsible_person"],
                                                          tool = row["tool"].split("; "),
                                                          start = row["start_date"],
                                                          end = row["end_date"],
@@ -1231,17 +1236,15 @@ class AdvancedMashup(BasicMashup):
 
         allActivities = self.getAllActivities()  # Getting all the activities
 
-        for activity in allActivities:
-                                               # Filter the Acquisition activity
+        for activity in allActivities: # Filter the Acquisition activity
             if hasattr(activity, "technique"): # Because only the acquisition activity has the attribute technique
 
-                    # Check if the start and end date of the acquisition is between the given dates
-                if activity.getStartDate() > start and activity.getEndDate() < end:
+                # Check if the start and end date of the acquisition is between the given dates
+                if activity.getStartDate() >= start and activity.getEndDate() <= end:
                     CHObject = activity.refersTo()
                     ObjectId = CHObject.getId()
 
                     author = self.getAuthorsOfCulturalHeritageObject(ObjectId)
-
                     if author and len(author)>0:
                         for i in author:
                             AuthorIds.add(i.getId())
