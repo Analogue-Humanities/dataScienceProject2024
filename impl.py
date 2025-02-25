@@ -103,7 +103,7 @@ class Activity(object):
         self.tool = set()
         if tool[0] != "":
             for i in tool:
-                self.tool.add(i)
+                self.tool.add(i.strip())
         self.start = start
         self.end = end
         self._cultural_heritage_object = cultural_heritage_object
@@ -1151,7 +1151,7 @@ class BasicMashup:
                     activityEndedBefore.append(activity_class(technique = row["technique"],
                                                                institute = row["responsible_institute"],
                                                                person = row["responsible_person"],
-                                                               tool = row["tool"].split("; "),
+                                                               tool = row["tool"].split(";"),
                                                                start = row["start_date"],
                                                                end = row["end_date"],
                                                                cultural_heritage_object = self.getEntityById(row["object_id"]),
@@ -1160,7 +1160,7 @@ class BasicMashup:
                 elif activity_class:
                     activityEndedBefore.append(activity_class(institute = row["responsible_institute"],
                                                                person = row["responsible_person"],
-                                                               tool = row["tool"].split("; "),
+                                                               tool = row["tool"].split(";"),
                                                                start = row["start_date"],
                                                                end = row["end_date"],
                                                                cultural_heritage_object = self.getEntityById(row["object_id"]),
