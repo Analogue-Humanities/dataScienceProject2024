@@ -230,27 +230,7 @@ class MetadataUploadHandler(UploadHandler):
 
             for idx, row in metaData.iterrows():
 
-                # Some data cleansing work
-                if row["Author"] == "":
-                    in_row_author = re.search(r'\((.*?),', row["Title"])
-                    if in_row_author:
-                        metaData.loc[idx, "Author"] = in_row_author.group(1)
-
-                if row["Date"] == "":
-                    in_row_date = re.search(r'\d{4}', row["Title"])
-                    if in_row_date:
-                        metaData.loc[idx, "Date"] = in_row_date.group(0)
-
-                if parenthesis_Pattern.search(row["Title"]):
-                    metaData.loc[idx, "Title"] = parenthesis_Pattern.sub("", row["Title"]).strip()
-
-                # Updating the dataframe with the cleansed data
-                row["Author"] = metaData.loc[idx, "Author"]
-                row["Date"] = metaData.loc[idx, "Date"]
-                row["Title"] = metaData.loc[idx, "Title"].strip()
-
-
-                objTitle = row["Title"].replace(" ","_")
+                objTitle = row["Title"].strip().replace(" ","_")
                 subject = URIRef(base_url+"/cHObject/"+row["Id"]+"_"+objTitle)
 
                 editedType = MetadataUploadHandler.makeClassName(self, row['Type'])
@@ -281,11 +261,11 @@ class MetadataUploadHandler(UploadHandler):
                 # Produce and add the RDF for the place information
                 myGraph.add((subject, place, Literal(row['Place'])))
 
-                all_authors = row['Author'].split("; ") # Separate the authors in case there are more than one author
+                all_authors = row['Author'].split(";") # Separate the authors in case there are more than one author
 
 
                 for auth in all_authors:
-                    theAuthor = self.handleAuthor(auth)
+                    theAuthor = self.handleAuthor(auth.strip())
 
                     if theAuthor is not None:
                         authorURI = URIRef(base_url + "/authors/" + theAuthor[1].replace(":", "_")+ "_"+ theAuthor[0].replace(" ", "_"))
