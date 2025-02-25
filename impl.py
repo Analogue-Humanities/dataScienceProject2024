@@ -101,8 +101,9 @@ class Activity(object):
         self.institute = institute
         self.person = person
         self.tool = set()
-        for i in tool:
-            self.tool.add(i)
+        if tool[0] != "":
+            for i in tool:
+                self.tool.add(i)
         self.start = start
         self.end = end
         self._cultural_heritage_object = cultural_heritage_object
