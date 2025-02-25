@@ -736,9 +736,7 @@ class ProcessDataQueryHandler(QueryHandler):
         df_activityBySD.drop(
             df_activityBySD[
                 ((df_activityBySD["responsible_institute"] == "")
-                 & (df_activityBySD["start_date"] == "")
-                 & (df_activityBySD["responsible_person"] == ""))].index, inplace=True
-        )
+                 | (df_activityBySD["start_date"] == ""))].index, inplace=True)
 
         df_activityBySD.reset_index(drop=True, inplace=True)
 
@@ -782,8 +780,7 @@ class ProcessDataQueryHandler(QueryHandler):
             df_activityByED.drop(
                 df_activityByED[
                     ((df_activityByED["responsible_institute"] == "")
-                     & (df_activityByED["start_date"] == "")
-                     & (df_activityByED["responsible_person"] == ""))].index, inplace=True
+                     | (df_activityByED["end_date"] == ""))].index, inplace=True
             )
 
             df_activityByED.reset_index(drop=True, inplace=True)
