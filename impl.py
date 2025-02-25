@@ -231,9 +231,9 @@ class MetadataUploadHandler(UploadHandler):
             for idx, row in metaData.iterrows():
 
                 objTitle = row["Title"].strip().replace(" ","_")
-                subject = URIRef(base_url+"/cHObject/"+row["Id"]+"_"+objTitle)
+                subject = URIRef(base_url+"/cHObject/"+row["Id"].strip()+"_"+objTitle)
 
-                editedType = MetadataUploadHandler.makeClassName(self, row['Type'])
+                editedType = MetadataUploadHandler.makeClassName(self, row['Type'].strip())
                 typeURI = base_url+"/types/"+editedType
 
                 #Add the triple of Cultural Heritage Object
@@ -250,16 +250,16 @@ class MetadataUploadHandler(UploadHandler):
                 myGraph.add((subject, id, Literal(row['Id'])))
 
                 # Add the triples of subject and title to the Graph
-                myGraph.add((subject, title, Literal(row['Title'])))
+                myGraph.add((subject, title, Literal(row['Title'].strip())))
 
                 # Add date triples
-                myGraph.add((subject, date, Literal(row['Date'])))
+                myGraph.add((subject, date, Literal(row['Date'].strip())))
 
                 # Produce the RDF of the owner information
-                myGraph.add((subject, owner, Literal(row['Owner'])))
+                myGraph.add((subject, owner, Literal(row['Owner'].strip())))
 
                 # Produce and add the RDF for the place information
-                myGraph.add((subject, place, Literal(row['Place'])))
+                myGraph.add((subject, place, Literal(row['Place'].strip())))
 
                 all_authors = row['Author'].split(";") # Separate the authors in case there are more than one author
 
