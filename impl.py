@@ -22,8 +22,11 @@ class CulturalHeritageObject(IdentifiableEntity):
         self.date = date
         self.owner = owner
         self.place = place
-        self._authors = [Person(name = author["authorName"][i],
-                                id = author["authorId"][i]) for i in range(len(author["authorName"]))]
+        if author["authorName"][0] != "nan":
+            self._authors = [Person(name = author["authorName"][i],
+                                    id = author["authorId"][i]) for i in range(len(author["authorName"]))]
+        else:
+            self._authors = []
 
     def getTitle(self):
         return self.title
@@ -203,7 +206,7 @@ class MetadataUploadHandler(UploadHandler):
 
         base_url = "https://github.com/Analogue-Humanities"
 
-        unknown = base_url+"/Unknown"
+        #unknown = base_url+"/Unknown"
         person = "https://schema.org/Person"
 
         # Attributes
@@ -213,7 +216,7 @@ class MetadataUploadHandler(UploadHandler):
         name = URIRef("https://schema.org/name")
         owner = URIRef("https://schema.org/owns")
         place = URIRef("https://schema.org/location")
-
+        typeChObj = URIRef(base_url+"/CulturalHeritageObject")
         # Relation
         author = URIRef("https://schema.org/author")
 
@@ -252,6 +255,8 @@ class MetadataUploadHandler(UploadHandler):
                 editedType = MetadataUploadHandler.makeClassName(self, row['Type'])
                 typeURI = base_url+"/types/"+editedType
 
+                #Add the triple of Cultural Heritage Object
+                myGraph.add((subject, RDF.type, typeChObj))
 
                 # Add the triples of subject and the type to the Graph
                 myGraph.add((subject, RDF.type, URIRef(typeURI)))
@@ -281,18 +286,22 @@ class MetadataUploadHandler(UploadHandler):
                 for auth in all_authors:
                     theAuthor = self.handleAuthor(auth)
 
-                    authorURI = URIRef(base_url + "/authors/" + theAuthor[1].replace(":", "_")+ "_"+ theAuthor[0].replace(" ", "_"))
+                    if theAuthor is not None:
+                        authorURI = URIRef(base_url + "/authors/" + theAuthor[1].replace(":", "_")+ "_"+ theAuthor[0].replace(" ", "_"))
 
-                    myGraph.add((subject, author, authorURI))
+                        myGraph.add((subject, author, authorURI))
 
-                    if (authorURI, id, Literal(theAuthor[1])) not in myGraph:
-                        myGraph.add((authorURI, id, Literal(theAuthor[1])))
+                        if (authorURI, id, Literal(theAuthor[1])) not in myGraph:
+                            myGraph.add((authorURI, id, Literal(theAuthor[1])))
 
-                    if (authorURI, name, Literal( theAuthor[0])) not in myGraph:
-                        myGraph.add((authorURI, name, Literal( theAuthor[0])))
+                        if (authorURI, name, Literal( theAuthor[0])) not in myGraph:
+                            myGraph.add((authorURI, name, Literal( theAuthor[0])))
 
-                    if (authorURI, RDF.type, URIRef(person)) not in myGraph:
-                        myGraph.add((authorURI, RDF.type, URIRef(person)))
+                        if (authorURI, RDF.type, URIRef(person)) not in myGraph:
+                            myGraph.add((authorURI, RDF.type, URIRef(person)))
+
+            # Add name for CH Object
+            myGraph.add((typeChObj, name, Literal("CulturalHeritageObject")))
 
             MetadataUploadHandler.uploadToGrDb(self, myGraph)
             return True
@@ -313,10 +322,12 @@ class MetadataUploadHandler(UploadHandler):
             match = re.match(r'([^()]+)\s*(\(([^)]+)\))?', author)
             if match:
                 authorName = match.group(1).strip()  # Extract the Name part
-                authorId = match.group(2)[1:-1].strip() if match.group(2) else "UnknownId"  # Extract ID or return default
+                authorId = "No_id"
+                if match.group(2):  # Extract ID
+                    authorId = match.group(2)[1:-1].strip()
                 return authorName, authorId
 
-            return "Unknown", "UnknownId"
+
 
 class ProcessDataUploadHandler(UploadHandler):
 
@@ -397,21 +408,21 @@ class QueryHandler(Handler):
             ?entityId schema:identifier "{id}".
             ?entityId schema:name ?name.
           	?entityId schema:identifier ?id.
-         	OPTIONAL {{
-         	          ?entityId rdf:type ?typeId.
-          	          ?typeId schema:name ?type.
-                      ?entityId schema:author ?author.
-                      ?author schema:name ?authorName.
-                      ?author schema:identifier ?authorId.
-                      ?entityId schema:dateCreated ?date.
-                      ?entityId schema:location ?place.
-                      ?entityId schema:owns ?owner.
-                    }}
-
+            ?entityId rdf:type ?typeId.
+            ?typeId schema:name ?type.  
+         	OPTIONAL {{?entityId schema:author ?author.
+         	           ?author schema:name ?authorName.
+         	           ?author schema:identifier ?authorId.
+         	           }}.
+         	OPTIONAL {{?entityId schema:location ?place.}}.
+         	OPTIONAL {{?entityId schema:owns ?owner.}}.
+            OPTIONAL {{?entityId schema:dateCreated ?date}}.
         }}
         """
+
         try:
             df_id = get(endpoint, query, True).astype(str)
+            df_id.drop(df_id[df_id["type"] == "CulturalHeritageObject"].index, inplace = True)
 
         except:
             df_id = DataFrame()
@@ -434,6 +445,7 @@ class MetadataQueryHandler(QueryHandler):
                }
                """
         df_persons = get(endpoint, query, True).astype({"id": str})
+        df_persons.dropna(thresh=2, inplace=True)
         return df_persons
 
     def getAllCulturalHeritageObjects(self) -> DataFrame:
@@ -443,33 +455,26 @@ class MetadataQueryHandler(QueryHandler):
                     PREFIX schema: <https://schema.org/>
                     PREFIX wikidata: <https://www.wikidata.org/wiki/>
                     SELECT ?s ?id ?objectName ?type ?authorName ?authorId ?date ?owner ?place
-                    WHERE {
-                      VALUES ?typeId {
-                        wikidata:Q728502
-                        schema:Book
-                        wikidata:Q181916
-                        wikidata:Q1261026
-                        wikidata:Q85869058
-                        schema:Painting
-                        schema:Map
-                        schema:ArchiveComponent
-                        schema:Manuscript
-                        wikidata:Q1979154
-                      }   
+                    WHERE {  
                       ?s rdf:type ?typeId.
-                      ?typeId schema:name ?type.
+                      ?typeId schema:name "CulturalHeritageObject".
+                      ?s rdf:type ?type2.
+                      ?type2 schema:name ?type.
                       ?s schema:identifier ?id.
                       ?s schema:name ?objectName.
+                      OPTIONAL {?s schema:dateCreated ?date}.
+                      OPTIONAL {?s schema:owns ?owner}.
+                      OPTIONAL {?s schema:location ?place}.
+                      OPTIONAL {
                       ?s schema:author ?author.
                       ?author schema:name ?authorName.
                       ?author schema:identifier ?authorId.
-                      ?s schema:dateCreated ?date.
-                      ?s schema:owns ?owner.
-                      ?s schema:location ?place.
+                      }                      
                     }
 
                        """
-        df_allCHObjects = get(endpoint, query, True).astype({"id": str, "date": str}).sort_values(by=["id"])
+        df_allCHObjects = get(endpoint, query, True).astype(str)
+        df_allCHObjects.drop(df_allCHObjects[df_allCHObjects["type"] == "CulturalHeritageObject"].index, inplace=True)
         return df_allCHObjects
 
     def getAuthorsOfCulturalHeritageObject(self, objectId: str) -> DataFrame:
@@ -873,11 +878,13 @@ class BasicMashup:
                 'authorName' : lambda x: list(x.unique()), # Take only the unique values of authors
                 'authorId' : lambda  x: list(x.unique())
             }).reset_index()
+
             if not match.empty:
                 row = match.iloc[0]
 
              # Dynamically construct the object based on the type
                 entity_class = self.type_to_class.get(row["type"])
+
                 if entity_class:
                     return entity_class(id = row["id"],
                                         title = row["name"],
